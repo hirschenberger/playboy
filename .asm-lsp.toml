@@ -1,0 +1,10 @@
+[default_config]
+version = "0.10.1"
+assembler = "gas"
+instruction_set = "riscv"
+
+[default_config.opts]
+compiler = "clang"
+compile_flags_txt = ['"--target=riscv32-unknown-elf"', '"-march=rv32imac_zicsr_zifencei_zba_zbb_zbs_zbkb"', '"-mabi=ilp32"', '"-x assembler-with-cpp"']
+diagnostics = true
+default_diagnostics = false

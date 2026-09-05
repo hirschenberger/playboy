@@ -5,44 +5,49 @@
 .global main
 .type main, @function
 main:
+    call clocks_init
     call lcd_gpio_init
-    call backlight_diagnostic
     call spi1_init
     call st7789_init
 
-    li a0, 0x0010                 # RGB565 navy background
+    li a0, 01000                 # RGB565 navy background
     call lcd_clear
 
     li a0, 20
     li a1, 32
     la a2, title_text
     li a3, 0xffff                 # white
-    li a4, 4                      # pixel scale
+    li a4, 2                      # pixel scale
     call draw_string
 
+    la s1, rainbow_colors         # colortable ptr
+    la s2, rainbow_colors_end     # colortable end ptr
+
+1:
     li a0, 20
     li a1, 104
     la a2, hello_text
-    li a3, 0xffe0                 # yellow
-    li a4, 5
+    lhu a3, 0(s1)                  # current colortable color
+    li a4, 3
     call draw_string
 
-1:
-    wfi
-    j 1b
+    li a0, 20
+    li a1, 170
+    li a2, 200
+    li a3, 20
+    lhu a4, 0(s1)
+    call fill_rect
 
-# Make startup visible without relying on the LCD controller. If this does not
-# visibly light the panel for two seconds, investigate power, mounting, or GP13.
-backlight_diagnostic:
-    li t0, SIO_BASE
-    li t1, LCD_BL_MASK
-    sw t1, SIO_GPIO_OUT_SET(t0)
-    li a0, 2000
+    li a0, 10
     call delay_ms
-    sw t1, SIO_GPIO_OUT_CLR(t0)
-    li a0, 250
-    call delay_ms
-    ret
+
+    addi s1, s1, 2
+    bne s1, s2, 1b
+
+    # start from the beginning
+    la s1, rainbow_colors
+
+    j 1b
 
 # Configure control pins as SIO outputs and GP10--12 as SPI1.
 lcd_gpio_init:
@@ -94,14 +99,90 @@ lcd_gpio_init:
     li t0, SIO_BASE
     li t1, LCD_GPIO_MASK
     sw t1, SIO_GPIO_OE_SET(t0)
-    li t1, (LCD_CS_MASK | LCD_RST_MASK | TOUCH_CS_MASK | SD_CS_MASK)
-    sw t1, SIO_GPIO_OUT_SET(t0)   # deselect LCD, touch, SD and release reset
-    li t1, (LCD_DC_MASK | LCD_BL_MASK)
+    li t1, (LCD_CS_MASK | LCD_BL_MASK | LCD_RST_MASK | TOUCH_CS_MASK | SD_CS_MASK)
+    sw t1, SIO_GPIO_OUT_SET(t0)   # deselect peripherals, turn on backlight
+    li t1, LCD_DC_MASK
     sw t1, SIO_GPIO_OUT_CLR(t0)
     ret
 
-# The SDK clock setup supplies a 125 MHz peripheral clock; CPSR=32 matches
-# Waveshare's 4 MHz reference initialization clock.
+# Configure the standard Pico 2 150 MHz clock tree: 12 MHz XOSC feeds
+# PLL_SYS at 1.5 GHz, divided by 5 and 2 for CLK_SYS and CLK_PERI.
+clocks_init:
+    li t0, XOSC_BASE
+    li t1, 3
+    sw t1, XOSC_STARTUP(t0)
+    li t1, XOSC_CTRL_ENABLE_12MHZ
+    sw t1, XOSC_CTRL(t0)
+0:
+    lw t1, XOSC_STATUS(t0)
+    li t2, XOSC_STATUS_STABLE
+    and t1, t1, t2
+    beqz t1, 0b
+
+    li t0, CLOCKS_BASE
+    li t1, CLOCKS_CLK_REF_XOSC
+    sw t1, CLOCKS_CLK_REF_CTRL(t0)
+1:
+    lw t1, CLOCKS_CLK_REF_SELECTED(t0)
+    li t2, CLOCKS_CLK_REF_XOSC_SELECTED
+    and t1, t1, t2
+    beqz t1, 1b
+
+    li t0, RESETS_BASE
+    lw t1, RESETS_RESET(t0)
+    li t2, RESETS_PLL_SYS_BIT
+    not t2, t2
+    and t1, t1, t2
+    sw t1, RESETS_RESET(t0)
+2:
+    lw t1, RESETS_RESET_DONE(t0)
+    li t2, RESETS_PLL_SYS_BIT
+    and t1, t1, t2
+    beqz t1, 2b
+
+    li t0, PLL_SYS_BASE
+    li t1, PLL_SYS_REFDIV
+    sw t1, PLL_CS(t0)
+    li t1, PLL_SYS_FBDIV
+    sw t1, PLL_FBDIV_INT(t0)
+    lw t1, PLL_PWR(t0)
+    li t2, (PLL_PWR_PD | PLL_PWR_VCOPD)
+    not t2, t2
+    and t1, t1, t2
+    sw t1, PLL_PWR(t0)
+3:
+    lw t1, PLL_CS(t0)
+    li t2, PLL_CS_LOCK
+    and t1, t1, t2
+    beqz t1, 3b
+    li t1, PLL_SYS_POSTDIVS
+    sw t1, PLL_PRIM(t0)
+    lw t1, PLL_PWR(t0)
+    li t2, PLL_PWR_POSTDIVPD
+    not t2, t2
+    and t1, t1, t2
+    sw t1, PLL_PWR(t0)
+
+    li t0, CLOCKS_BASE
+    li t1, CLOCKS_CLK_SYS_AUX
+    sw t1, CLOCKS_CLK_SYS_CTRL(t0)
+4:
+    lw t1, CLOCKS_CLK_SYS_SELECTED(t0)
+    li t2, CLOCKS_CLK_SYS_AUX_SELECTED
+    and t1, t1, t2
+    beqz t1, 4b
+
+    li t0, CLOCKS_BASE
+    li t1, CLOCKS_CLK_PERI_ENABLE
+    sw t1, CLOCKS_CLK_PERI_CTRL(t0)
+5:
+    lw t1, CLOCKS_CLK_PERI_CTRL(t0)
+    li t2, CLOCKS_CLK_PERI_ENABLED
+    and t1, t1, t2
+    beqz t1, 5b
+    ret
+
+# CLK_PERI runs at 150 MHz; CPSR=4 produces a 37.5 MHz mode-0 SPI clock.
 spi1_init:
     li t0, RESETS_BASE
     lw t1, RESETS_RESET(t0)
@@ -119,7 +200,7 @@ spi1_init:
     sw zero, SPI_CR1(t0)
     li t1, SPI_CR0_8BIT_MODE0
     sw t1, SPI_CR0(t0)
-    li t1, 32
+    li t1, SPI_CPSR_37_5MHZ
     sw t1, SPI_CPSR(t0)
     li t1, SPI_CR1_ENABLE
     sw t1, SPI_CR1(t0)
@@ -230,6 +311,7 @@ lcd_data_byte:
     li t0, SIO_BASE
     li t1, LCD_DC_MASK
     sw t1, SIO_GPIO_OUT_SET(t0)
+    j lcd_write_byte
 
 # a0=command, a1=data address, a2=data byte count.
 lcd_command_data:
@@ -294,10 +376,13 @@ set_window:
     lw t1, 20(sp)
     srli a0, t0, 8
     call lcd_data_byte
+    lw t0, 24(sp)
     andi a0, t0, 0xff
     call lcd_data_byte
+    lw t1, 20(sp)
     srli a0, t1, 8
     call lcd_data_byte
+    lw t1, 20(sp)
     andi a0, t1, 0xff
     call lcd_data_byte
     li a0, ST_RASET
@@ -306,10 +391,13 @@ set_window:
     lw t1, 12(sp)
     srli a0, t0, 8
     call lcd_data_byte
+    lw t0, 16(sp)
     andi a0, t0, 0xff
     call lcd_data_byte
+    lw t1, 12(sp)
     srli a0, t1, 8
     call lcd_data_byte
+    lw t1, 12(sp)
     andi a0, t1, 0xff
     call lcd_data_byte
     li a0, ST_RAMWR
@@ -329,30 +417,38 @@ write_color:
     andi t3, a0, 0xff
     li t0, SPI1_BASE
 0:
-    beqz a1, 2f
+    beqz a1, 4f
+    # The RP2350 SPI FIFO holds eight bytes. Send up to four pixels before
+    # draining their matching RX bytes, keeping the transmitter full safely.
+    li t4, 4
+    bge a1, t4, 1f
+    mv t4, a1
 1:
+    mv t5, t4
+2:
     lw t1, SPI_SR(t0)
     andi t1, t1, SPI_SR_TNF
-    beqz t1, 1b
-    sw t2, SPI_DR(t0)
+    beqz t1, 2b
+    sh t2, SPI_DR(t0)
 3:
     lw t1, SPI_SR(t0)
-    andi t1, t1, SPI_SR_RNE
-    beqz t1, 3b
-    lw t1, SPI_DR(t0)
-4:
-    lw t1, SPI_SR(t0)
     andi t1, t1, SPI_SR_TNF
-    beqz t1, 4b
-    sw t3, SPI_DR(t0)
+    beqz t1, 3b
+    sh t3, SPI_DR(t0)
+    addi t5, t5, -1
+    bnez t5, 2b
+
+    slli t5, t4, 1
 5:
     lw t1, SPI_SR(t0)
     andi t1, t1, SPI_SR_RNE
     beqz t1, 5b
     lw t1, SPI_DR(t0)
-    addi a1, a1, -1
+    addi t5, t5, -1
+    bnez t5, 5b
+    sub a1, a1, t4
     j 0b
-2:
+4:
 6:
     lw t1, SPI_SR(t0)
     andi t1, t1, SPI_SR_BSY
@@ -423,8 +519,8 @@ draw_string:
     mv a4, t1
     call draw_char
     lw t0, 24(sp)
-    slli t1, t0, 2
-    add t1, t1, t0             # glyph width plus one spacing column
+    li t1, 6
+    mul t1, t1, t0             # five glyph columns plus one spacing column
     lw t2, 40(sp)
     add t2, t2, t1
     sw t2, 40(sp)
@@ -460,12 +556,14 @@ draw_char:
     lw t1, 40(sp)
     add t1, t1, t0
     lbu t1, 0(t1)
+    sw t1, 28(sp)
     li t2, 0
     sw t2, 32(sp)              # row
 1:
     lw t2, 32(sp)
     li t3, 7
     bge t2, t3, 3f
+    lw t1, 28(sp)
     li t3, 1
     sll t3, t3, t2
     and t3, t3, t1
@@ -498,12 +596,10 @@ draw_char:
     addi sp, sp, 64
     ret
 
-# a0=milliseconds. The SDK starts clk_sys at 125 MHz; this is intentionally
-# conservative and needs only millisecond-level accuracy for panel startup.
+# a0=milliseconds. CLK_SYS is configured to 150 MHz by clocks_init.
 delay_ms:
-    # The compressed decrement/branch inner loop costs approximately two
-    # 125 MHz core cycles per iteration, giving a conservative 1 ms delay.
-    li t0, 62500
+    # The decrement/branch inner loop costs approximately two core cycles.
+    li t0, 75000
 0:
     mv t1, t0
 1:
@@ -517,7 +613,7 @@ delay_ms:
 title_text:
     .asciz "RP2350 HAZARD3"
 hello_text:
-    .asciz "HELLO, WORLD!"
+    .asciz "HALLO VALLI!"
 
 st7789_madctl: .byte 0x60
 st7789_colmod: .byte 0x55
@@ -552,3 +648,38 @@ font5x7:
     .byte 62,65,81,33,94, 127,9,25,41,70, 70,73,73,73,49, 1,1,127,1,1
     .byte 63,64,64,64,63, 31,32,64,32,31, 63,64,56,64,63, 99,20,8,20,99
     .byte 7,8,112,8,7, 97,81,73,69,67
+
+rainbow_colors:
+    .hword 0xF800, 0xF820, 0xF860, 0xF880, 0xF8C0, 0xF8E0, 0xF920, 0xF940
+    .hword 0xF980, 0xF9A0, 0xF9E0, 0xFA00, 0xFA40, 0xFA60, 0xFAA0, 0xFAC0
+    .hword 0xFB00, 0xFB20, 0xFB60, 0xFB80, 0xFBC0, 0xFBE0, 0xFC00, 0xFC40
+    .hword 0xFC60, 0xFCA0, 0xFCC0, 0xFD00, 0xFD20, 0xFD60, 0xFD80, 0xFDC0
+    .hword 0xFDE0, 0xFE20, 0xFE40, 0xFE80, 0xFEA0, 0xFEE0, 0xFF00, 0xFF40
+    .hword 0xFF60, 0xFFA0, 0xFFC0, 0xFFE0, 0xF7E0, 0xF7E0, 0xEFE0, 0xE7E0
+    .hword 0xDFE0, 0xDFE0, 0xD7E0, 0xCFE0, 0xC7E0, 0xC7E0, 0xBFE0, 0xB7E0
+    .hword 0xAFE0, 0xAFE0, 0xA7E0, 0x9FE0, 0x97E0, 0x97E0, 0x8FE0, 0x87E0
+    .hword 0x87E0, 0x7FE0, 0x77E0, 0x6FE0, 0x6FE0, 0x67E0, 0x5FE0, 0x57E0
+    .hword 0x57E0, 0x4FE0, 0x47E0, 0x3FE0, 0x3FE0, 0x37E0, 0x2FE0, 0x27E0
+    .hword 0x27E0, 0x1FE0, 0x17E0, 0x0FE0, 0x0FE0, 0x07E0, 0x07E0, 0x07E1
+    .hword 0x07E2, 0x07E2, 0x07E3, 0x07E4, 0x07E5, 0x07E5, 0x07E6, 0x07E7
+    .hword 0x07E8, 0x07E8, 0x07E9, 0x07EA, 0x07EB, 0x07EB, 0x07EC, 0x07ED
+    .hword 0x07EE, 0x07EE, 0x07EF, 0x07F0, 0x07F0, 0x07F1, 0x07F2, 0x07F3
+    .hword 0x07F3, 0x07F4, 0x07F5, 0x07F6, 0x07F6, 0x07F7, 0x07F8, 0x07F9
+    .hword 0x07F9, 0x07FA, 0x07FB, 0x07FC, 0x07FC, 0x07FD, 0x07FE, 0x07FF
+    .hword 0x07FF, 0x07DF, 0x079F, 0x077F, 0x073F, 0x071F, 0x06DF, 0x06BF
+    .hword 0x067F, 0x065F, 0x061F, 0x05FF, 0x05BF, 0x059F, 0x055F, 0x053F
+    .hword 0x04FF, 0x04DF, 0x049F, 0x047F, 0x043F, 0x041F, 0x03FF, 0x03BF
+    .hword 0x039F, 0x035F, 0x033F, 0x02FF, 0x02DF, 0x029F, 0x027F, 0x023F
+    .hword 0x021F, 0x01DF, 0x01BF, 0x017F, 0x015F, 0x011F, 0x00FF, 0x00BF
+    .hword 0x009F, 0x005F, 0x003F, 0x001F, 0x081F, 0x081F, 0x101F, 0x181F
+    .hword 0x201F, 0x201F, 0x281F, 0x301F, 0x381F, 0x381F, 0x401F, 0x481F
+    .hword 0x501F, 0x501F, 0x581F, 0x601F, 0x681F, 0x681F, 0x701F, 0x781F
+    .hword 0x801F, 0x801F, 0x881F, 0x901F, 0x901F, 0x981F, 0xA01F, 0xA81F
+    .hword 0xA81F, 0xB01F, 0xB81F, 0xC01F, 0xC01F, 0xC81F, 0xD01F, 0xD81F
+    .hword 0xD81F, 0xE01F, 0xE81F, 0xF01F, 0xF01F, 0xF81F, 0xF81F, 0xF81E
+    .hword 0xF81D, 0xF81D, 0xF81C, 0xF81B, 0xF81A, 0xF81A, 0xF819, 0xF818
+    .hword 0xF817, 0xF817, 0xF816, 0xF815, 0xF814, 0xF814, 0xF813, 0xF812
+    .hword 0xF811, 0xF811, 0xF810, 0xF80F, 0xF80F, 0xF80E, 0xF80D, 0xF80C
+    .hword 0xF80C, 0xF80B, 0xF80A, 0xF809, 0xF809, 0xF808, 0xF807, 0xF806
+    .hword 0xF806, 0xF805, 0xF804, 0xF803, 0xF803, 0xF802, 0xF801, 0xF800
+rainbow_colors_end:

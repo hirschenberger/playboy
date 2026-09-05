@@ -1,0 +1,127 @@
+[vars]
+llvm_version = "19"
+clang = "clang-{{vars.llvm_version}} --target=riscv32-unknown-elf"
+readelf = "llvm-readelf-{{vars.llvm_version}}"
+size = "llvm-size-{{vars.llvm_version}}"
+objdump = "llvm-objdump-{{vars.llvm_version}}"
+gdb = "gdb-multiarch"
+openocd_dir = ".tools/openocd-rp2350"
+openocd = "{{vars.openocd_dir}}/src/openocd"
+openocd_scripts = "{{vars.openocd_dir}}/tcl"
+
+build_dir = "build"
+image_name = "playboy"
+
+elf = "{{vars.build_dir}}/{{vars.image_name}}.elf"
+uf2 = "{{vars.build_dir}}/{{vars.image_name}}.uf2"
+map = "{{vars.build_dir}}/{{vars.image_name}}.map"
+disassembly = "{{vars.build_dir}}/{{vars.image_name}}.dis"
+openocd_log = "{{vars.build_dir}}/openocd.log"
+asm_flags = "-march=rv32imac_zicsr_zifencei_zba_zbb_zbs_zbkb -mabi=ilp32 -fno-pic -I src"
+
+[bootstrap.packages]
+"apt:clang-19" = "latest"
+"apt:lld-19" = "latest"
+"apt:llvm-19" = "latest"
+"apt:picotool" = "latest"
+"apt:gdb-multiarch" = "latest"
+"apt:git" = "latest"
+"apt:autoconf" = "latest"
+"apt:automake" = "latest"
+"apt:libtool" = "latest"
+"apt:pkg-config" = "latest"
+"apt:libusb-1.0-0-dev" = "latest"
+
+[tasks.link]
+description = "Assemble and link standalone RP2350 RISC-V ELF"
+sources = ["src/rp2350-riscv.ld", "src/**/*.S", "src/**/*.inc"]
+outputs = ["{{vars.elf}}", "{{vars.map}}"]
+run = [
+  "mkdir -p {{vars.build_dir}}",
+  "{{vars.clang}} -g {{vars.asm_flags}} -nostdlib -T src/rp2350-riscv.ld -Wl,-Map,{{vars.map}} src/*.S -o {{vars.elf}}",
+]
+
+[tasks.uf2]
+description = "Package RP2350 RISC-V UF2"
+depends = ["link"]
+sources = ["{{vars.elf}}"]
+outputs = ["{{vars.uf2}}"]
+run = "picotool uf2 convert --quiet {{vars.elf}} {{vars.uf2}} --family rp2350-riscv --abs-block"
+
+[tasks.build]
+description = "Build standalone RP2350 RISC-V firmware"
+depends = ["uf2"]
+
+[tasks.setup-debugger]
+description = "Build Raspberry Pi OpenOCD with RP2350 RISC-V support"
+outputs = ["{{vars.openocd}}"]
+run = """
+set -eu
+test -x {{vars.openocd}} && exit 0
+mkdir -p .tools
+if test ! -d {{vars.openocd_dir}}; then
+  git clone --depth 1 --recurse-submodules --branch rpi-common https://github.com/raspberrypi/openocd.git {{vars.openocd_dir}}
+else
+  git -C {{vars.openocd_dir}} submodule update --init jimtcl
+fi
+cd {{vars.openocd_dir}}
+./bootstrap
+CC=clang-{{vars.llvm_version}} ./configure --enable-cmsis-dap-v2 --disable-cmsis-dap --enable-internal-jimtcl --disable-werror
+make -j$(nproc)
+"""
+
+[tasks.flash]
+description = "Flash and start the RISC-V ELF through the CMSIS-DAP SWD probe"
+depends = ["build", "setup-debugger"]
+run = """
+set -eu
+mkdir -p {{vars.build_dir}}
+{{vars.openocd}} -s {{vars.openocd_scripts}} -f interface/cmsis-dap.cfg -c 'adapter speed 1000' -f target/rp2350-riscv.cfg > {{vars.openocd_log}} 2>&1 &
+openocd_pid=$!
+trap 'kill "$openocd_pid" 2>/dev/null || true; wait "$openocd_pid" 2>/dev/null || true' EXIT
+sleep 1
+{{vars.gdb}} --batch --quiet --nx {{vars.elf}} \
+  -ex 'set architecture riscv:rv32' \
+  -ex 'target extended-remote :3333' \
+  -ex 'monitor halt' \
+  -ex 'load' \
+  -ex 'set $sp = 0x20001000' \
+  -ex 'set $pc = _reset_handler' \
+  -ex 'monitor resume' \
+  -ex 'detach'
+"""
+
+[tasks.debug]
+description = "Start an interactive GDB session through the CMSIS-DAP SWD probe"
+depends = ["link", "setup-debugger"]
+raw = true
+run = """
+set -eu
+mkdir -p {{vars.build_dir}}
+{{vars.openocd}} -s {{vars.openocd_scripts}} -f interface/cmsis-dap.cfg -c 'adapter speed 1000' -f target/rp2350-riscv.cfg > {{vars.openocd_log}} 2>&1 &
+openocd_pid=$!
+trap 'kill "$openocd_pid" 2>/dev/null || true; wait "$openocd_pid" 2>/dev/null || true' EXIT
+sleep 1
+{{vars.gdb}} {{vars.elf}} -ex 'set architecture riscv:rv32' -ex 'target extended-remote :3333' -ex 'monitor halt' -ex 'layout src' -ex 'layout regs'
+reset
+"""
+
+[tasks.inspect]
+description = "Inspect ELF and UF2 target metadata"
+depends = ["build"]
+run = [
+  "{{vars.readelf}} -h {{vars.elf}}",
+  "{{vars.size}} {{vars.elf}}",
+  "picotool info {{vars.uf2}}",
+]
+
+[tasks.disassemble]
+description = "Write annotated RISC-V disassembly"
+depends = ["link"]
+sources = ["{{vars.elf}}"]
+outputs = ["{{vars.disassembly}}"]
+run = "{{vars.objdump}} -d -S {{vars.elf}} > {{vars.disassembly}}"
+
+[tasks.clean]
+description = "Remove generated build artifacts"
+run = "rm -rf {{vars.build_dir}}"

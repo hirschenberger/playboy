@@ -1,96 +1,121 @@
 # Pico 2 W RISC-V LCD Hello World
 
-This is a first bare-metal RISC-V assembly project for a Raspberry Pi Pico 2 W
-and Waveshare Pico-ResTouch-LCD-2.8. It draws `HELLO, WORLD!` on the 320x240
-panel using the RP2350's Hazard3 RISC-V core.
+An SDK-free, bare-metal RISC-V assembly project for the Raspberry Pi Pico 2 W
+and Waveshare Pico-ResTouch-LCD-2.8. The target image owns its RP2350 picobin
+metadata, reset entry, stack setup, memory initialization, GPIO, SPI, and
+ST7789VW display driver. It does not use Pico SDK, CMake, Ninja, Picolibc, or a
+C/C++ runtime.
+
+`mise` provisions and runs the project workflow. It pins Clang, LLD, and LLVM
+to version 19; Clang assembles the sources and links the ELF through LLD, while
+the configured LLVM version provides the inspection and disassembly tools.
+`picotool` turns the finished ELF into a UF2. Flashing and debugging use a
+CMSIS-DAP SWD probe through Raspberry Pi's RP2350-capable OpenOCD build.
+
+## Prerequisites
+
+Install [Mise](https://mise.jdx.dev/getting-started.html) once. It is not
+available from this host's configured Debian repositories, so use its official
+installer:
+
+```sh
+curl https://mise.run | sh
+~/.local/bin/mise --version
+```
+
+For the current shell, add Mise to `PATH`:
+
+```sh
+export PATH="$HOME/.local/bin:$PATH"
+```
+
+Then let mise provision the project host dependencies:
+
+```sh
+mise bootstrap packages apply
+```
+
+Clang targets `riscv32-unknown-elf` and is invoked with `-march=rv32...` and
+`-mabi=ilp32`, producing code for the RP2350's 32-bit Hazard3 RISC-V core.
+No target C library is required because the build uses `-nostdlib`.
+
+Connect the CMSIS-DAP probe's SWDIO, SWCLK, and GND signals to the Pico 2
+debug connector. The target must be running in RISC-V mode; use BOOTSEL and
+`picotool reboot --application --cpu riscv` if it was last started as ARM.
+
+## Build, flash, and debug
+
+```sh
+mise run build
+mise run inspect
+mise run flash
+```
+
+The resulting files are:
+
+| File | Purpose |
+|---|---|
+| `build/playboy.elf` | linked ELF32 RISC-V image |
+| `build/playboy.uf2` | RP2350 RISC-V UF2 artifact |
+| `build/playboy.map` | flash/RAM linker map |
+| `build/playboy.dis` | produced by `mise run disassemble` |
+
+`mise run flash` builds the image, uses SWD to program and verify the ELF, and
+starts core 0 at its RISC-V reset handler. Its OpenOCD log is written to
+`build/openocd.log`.
+
+To start an interactive GDB session over SWD:
+
+```sh
+mise run debug
+```
+
+The first debugger setup runs `mise run setup-debugger`, which builds Raspberry
+Pi's OpenOCD fork in `.tools/openocd-rp2350`; Debian's stock OpenOCD package
+does not include the RP2350 RISC-V target configuration.
 
 ## Hardware
 
-Mount the Pico 2 W directly on the LCD board with the Pico USB connector facing
-the same direction as the LCD board's microSD slot. The board fixes these pins:
+Mount the Pico 2 W directly on the LCD with its USB connector facing the same
+direction as the LCD microSD slot.
 
-| GPIO | Signal | Role |
+| GPIO | Signal | Use |
 |---:|---|---|
-| GP8 | LCD_DC | command/data select |
-| GP9 | LCD_CS | active-low LCD select |
-| GP10 | LCD_CLK | SPI1 SCK |
+| GP8 | LCD_DC | command/data selection |
+| GP9 | LCD_CS | LCD active-low chip select |
+| GP10 | LCD_CLK | SPI1 clock |
 | GP11 | MOSI | SPI1 transmit |
-| GP12 | MISO | unused by this write-only display |
-| GP13 | LCD_BL | backlight |
-| GP15 | LCD_RST | hardware reset |
-| GP16 | TP_CS | held high; touch is deferred |
-| GP17 | TP_IRQ | unused; touch is deferred |
+| GP12 | MISO | SPI1 receive; initialized for the shared bus |
+| GP13 | LCD_BL | backlight, driven high |
+| GP15 | LCD_RST | LCD active-low reset |
+| GP16 | TP_CS | XPT2046 touch deselected |
+| GP22 | SD_CS | microSD deselected |
 
-The display controller is **ST7789VW** and uses mode-0 SPI with RGB565 pixel
-data. XPT2046 touch support is intentionally not part of this display-only
-lesson.
+The 320x240 display is an ST7789VW panel using RGB565 and SPI mode 0. Touch,
+microSD, wireless, USB, interrupts, heap allocation, and multicore support are
+purposely outside this first assembly exercise.
 
-## Setup and build
+## Image and source layout
 
-Run the dependency bootstrap once. It installs the RISC-V GCC/binutils plus
-the matching Picolibc and C++ runtime packages,
-`picotool`, CMake/Ninja prerequisites, and clones Pico SDK 2.3.0 into
-`.deps/pico-sdk`:
+- `mise.toml` declares Debian host dependencies with `bootstrap.packages` and
+  contains every build, packaging, inspection, and flashing task. `mise run
+  link` assembles and links the ELF in one compiler invocation; `mise run uf2`
+  packages it, and `mise run clean` removes generated output.
+- `src/picobin.S` is the RP2350 boot ROM metadata block. It marks the image as
+  an executable for the RP2350 RISC-V core and supplies the reset entry and
+  initial stack address.
+- `src/rp2350-riscv.ld` maps picobin metadata, executable code, and constants
+  into XIP flash at `0x10000000`, reserves RAM at `0x20000000`, and exports
+  startup boundaries.
+- `src/start.S` sets the stack, copies `.data`, clears `.bss`, invokes `main`,
+  and safely waits if it ever returns. The current application has no mutable
+  initialized data, but the startup is complete for future lessons.
+- `src/rp2350.inc` names the directly accessed RP2350 GPIO, reset, clock,
+  PLL, SIO, and SPI registers.
+- `src/main.S` configures the 12 MHz crystal and 150 MHz system PLL, configures
+  the display signals and SPI1 at 37.5 MHz, initializes the vendor-specific
+  ST7789VW settings, then draws text using a 5x7 bitmap font.
 
-```sh
-./scripts/setup-deps.sh
-cmake --preset pico2-riscv
-cmake --build --preset pico2-riscv
-```
-
-The firmware is `build/pico2-riscv/pico2_lcd_hello.uf2`. Hold **BOOTSEL** while
-connecting the Pico USB cable, then copy that UF2 onto the mounted `RPI-RP2`
-drive. Alternatively, when `picotool` can find the board:
-
-```sh
-picotool load -f build/pico2-riscv/pico2_lcd_hello.uf2
-picotool reboot
-```
-
-`PICO_SDK_PATH` can point at an existing Pico SDK installation. The CMake preset
-selects `PICO_PLATFORM=rp2350-riscv` and `PICO_BOARD=pico2_w`; do not use the
-installed ARM compiler for this project. Debian's multilib package is prefixed
-`riscv64-unknown-elf`, but the preset explicitly directs it to produce the
-RP2350's 32-bit RISC-V code.
-
-Debian packages Picolibc separately from its RISC-V GCC. The project passes
-its `/usr/lib/picolibc/riscv64-unknown-elf/picolibc.specs` compiler and linker
-specs so the 32-bit headers and runtime are located correctly.
-
-## Assembly tour
-
-`src/main.S` is the whole application:
-
-1. `lcd_gpio_init` removes pad isolation, assigns GP10/11 to SPI1, and makes
-   the control pins SIO outputs.
-2. `spi1_init` releases SPI1 reset and selects 8-bit, mode-0 SPI at the
-   vendor reference 3.90625 MHz (125 MHz / 32).
-3. `st7789_init` applies Waveshare's ST7789VW power, gamma, and RGB565
-   initialization sequence before selecting landscape output.
-4. `set_window` and `write_color` demonstrate command/data transactions and
-   address-window pixel streaming.
-5. `draw_string` and `draw_char` walk a 5x7 ASCII bitmap font and construct
-   scaled pixels using RGB565 rectangles.
-
-`src/rp2350.inc` names the RP2350 peripheral registers and LCD commands used by
-the lesson. It is deliberately small enough to compare with the Pico SDK's
-generated RP2350 register headers.
-
-## Troubleshooting
-
-- The current diagnostic image lights the GP13 backlight for two seconds,
-  turns it off for one quarter-second, then initializes the controller. If the
-  panel never lights during that first two seconds, stop debugging SPI: inspect
-  USB power/cable, the direct-header mounting direction, and the GP13/backlight
-  hardware path first.
-- A lit but blank panel usually means the Pico is mounted backwards, `LCD_RST`
-  is not released, or the wrong display controller initialization was used.
-- Garbled pixels commonly indicate an SPI mode/order error; this board needs
-  CPOL=0, CPHA=0 and MSB-first transfers.
-- Wrong colors are normally RGB565 byte ordering or the ST7789 BGR bit; this
-  example selects BGR with `MADCTL=0x60`.
-- If CMake cannot find a RISC-V compiler, rerun `setup-deps.sh` or ensure
-  `riscv64-unknown-elf-gcc` is on `PATH`. The Pico SDK accepts that multilib
-  toolchain for its 32-bit RISC-V target.
-- Touch shares SPI1 but is deliberately deselected. Add XPT2046 commands and
-  calibration only after this greeting works.
+The RP2350 boot ROM makes an initial XIP flash configuration before entering
+the picobin-declared RISC-V reset handler. The application then owns the
+clock-tree setup, using the board's 12 MHz crystal and PLL_SYS at 150 MHz.
