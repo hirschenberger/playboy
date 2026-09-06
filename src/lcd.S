@@ -1,57 +1,62 @@
-#include "macros.h"
 #include "rp2350.h"
 
 .global lcd_init, set_window
 
 lcd_init:
-    INIT_STACK 16
-    PUSH_STACK RA 12 ra
-    
+    addi sp, sp, -16
+    .equ LCD_INIT_RA, 12
+    sw ra, LCD_INIT_RA(sp)
     call clocks_init
     call lcd_gpio_init
     call spi1_init
     call st7789_init
 
-    EXIT_STACK 
+    lw ra, LCD_INIT_RA(sp)
+    addi sp, sp, 16
     ret
 
 # a0=x0, a1=x1, a2=y0, a3=y1. Leave LCD selected and in data mode for RAMWR.
 set_window:
-    INIT_STACK 32
-    PUSH_STACK RA 28 ra
-    PUSH_STACK X0 24 a0
-    PUSH_STACK X1 20 a1
-    PUSH_STACK Y0 16 a2
-    PUSH_STACK Y1 12 a3
+    addi sp, sp, -32
+    .equ SET_WINDOW_RA, 28
+    .equ SET_WINDOW_X0, 24
+    .equ SET_WINDOW_X1, 20
+    .equ SET_WINDOW_Y0, 16
+    .equ SET_WINDOW_Y1, 12
+    sw ra, SET_WINDOW_RA(sp)
+    sw a0, SET_WINDOW_X0(sp)
+    sw a1, SET_WINDOW_X1(sp)
+    sw a2, SET_WINDOW_Y0(sp)
+    sw a3, SET_WINDOW_Y1(sp)
 
     li a0, ST_CASET
     call lcd_command
-    lw t0, X0(sp)
-    lw t1, X1(sp)
+    lw t0, SET_WINDOW_X0(sp)
+    lw t1, SET_WINDOW_X1(sp)
     srli a0, t0, 8
     call lcd_data_byte
-    lw t0, X0(sp)
+    lw t0, SET_WINDOW_X0(sp)
     andi a0, t0, 0xff
     call lcd_data_byte
-    lw t1, X1(sp)
+    lw t1, SET_WINDOW_X1(sp)
     srli a0, t1, 8
     call lcd_data_byte
-    lw t1, X1(sp)
+    lw t1, SET_WINDOW_X1(sp)
     andi a0, t1, 0xff
     call lcd_data_byte
     li a0, ST_RASET
     call lcd_command
-    lw t0, Y0(sp)
-    lw t1, Y1(sp)
+    lw t0, SET_WINDOW_Y0(sp)
+    lw t1, SET_WINDOW_Y1(sp)
     srli a0, t0, 8
     call lcd_data_byte
-    lw t0, Y0(sp)
+    lw t0, SET_WINDOW_Y0(sp)
     andi a0, t0, 0xff
     call lcd_data_byte
-    lw t1, Y1(sp)
+    lw t1, SET_WINDOW_Y1(sp)
     srli a0, t1, 8
     call lcd_data_byte
-    lw t1, Y1(sp)
+    lw t1, SET_WINDOW_Y1(sp)
     andi a0, t1, 0xff
     call lcd_data_byte
     li a0, ST_RAMWR
@@ -62,7 +67,8 @@ set_window:
     li t1, LCD_CS_MASK
     sw t1, SIO_GPIO_OUT_CLR(t0)
 
-    EXIT_STACK 
+    lw ra, SET_WINDOW_RA(sp)
+    addi sp, sp, 32
     ret
 
 
@@ -224,8 +230,9 @@ spi1_init:
     ret
 
 st7789_init:
-    INIT_STACK 16
-    PUSH_STACK RA 12 ra
+    addi sp, sp, -16
+    .equ ST7789_INIT_RA, 12
+    sw ra, ST7789_INIT_RA(sp)
 
     li t0, SIO_BASE
     li t1, LCD_RST_MASK
@@ -316,7 +323,8 @@ st7789_init:
     li t1, LCD_BL_MASK
     sw t1, SIO_GPIO_OUT_SET(t0)
 
-    EXIT_STACK
+    lw ra, ST7789_INIT_RA(sp)
+    addi sp, sp, 16
     ret
 
 lcd_command:
@@ -333,27 +341,31 @@ lcd_data_byte:
 
 # a0=command, a1=data address, a2=data byte count.
 lcd_command_data:
-    INIT_STACK 16
-    PUSH_STACK RA 12 ra
-    PUSH_STACK DATA_ADDR 8 a1
-    PUSH_STACK BYTE_COUNT 4 a2
+    addi sp, sp, -16
+    .equ LCD_COMMAND_DATA_RA, 12
+    .equ LCD_COMMAND_DATA_ADDRESS, 8
+    .equ LCD_COMMAND_DATA_COUNT, 4
+    sw ra, LCD_COMMAND_DATA_RA(sp)
+    sw a1, LCD_COMMAND_DATA_ADDRESS(sp)
+    sw a2, LCD_COMMAND_DATA_COUNT(sp)
 
     call lcd_command
 0:
-    lw t0, BYTE_COUNT(sp)
+    lw t0, LCD_COMMAND_DATA_COUNT(sp)
     beqz t0, 1f
-    lw t1, DATA_ADDR(sp)
+    lw t1, LCD_COMMAND_DATA_ADDRESS(sp)
     lbu a0, 0(t1)
     call lcd_data_byte
-    lw t1, DATA_ADDR(sp)
+    lw t1, LCD_COMMAND_DATA_ADDRESS(sp)
     addi t1, t1, 1
-    sw t1, DATA_ADDR(sp)
-    lw t0, BYTE_COUNT(sp)
+    sw t1, LCD_COMMAND_DATA_ADDRESS(sp)
+    lw t0, LCD_COMMAND_DATA_COUNT(sp)
     addi t0, t0, -1
-    sw t0, BYTE_COUNT(sp)
+    sw t0, LCD_COMMAND_DATA_COUNT(sp)
     j 0b
 1:
-    EXIT_STACK
+    lw ra, LCD_COMMAND_DATA_RA(sp)
+    addi sp, sp, 16
     ret
 
 lcd_write_byte:

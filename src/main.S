@@ -1,4 +1,3 @@
-#include "macros.h"
 #include "rp2350.h"
 
 .section .text
@@ -14,7 +13,6 @@ main:
 
     la s1, rainbow_colors         # colortable ptr
     la s2, rainbow_colors_end     # colortable end ptr
-
 1:
     li a0, 20
     li a1, 80
@@ -26,9 +24,9 @@ main:
     li a0, 20
     li a1, 104
     la a2, hello_text
-    lhu a3, 0(s1)                  # current colortable color
+    mv a3, s1                  # current colortable pointer
     li a4, 3
-    call draw_string
+    call draw_rainbow_string
 
     li a0, 20
     li a1, 140
@@ -40,11 +38,13 @@ main:
     li a0, 10
     call delay_ms
 
-    addi s1, s1, 2
-    bne s1, s2, 1b
+    # Move the rainbow phase backward by one RGB565 entry per frame.
+    addi s1, s1, -2
+    la t0, rainbow_colors
+    bgeu s1, t0, 1b
 
-    # start from the beginning
-    la s1, rainbow_colors
+    # The decrement passed the first entry; wrap to the final entry.
+    addi s1, s2, -2
 
     j 1b
 
@@ -99,32 +99,36 @@ write_color:
 
 # a0=color. Clear all 320*240 pixels.
 lcd_clear:
-    INIT_STACK 16
-    PUSH_STACK RA 12 ra
-    PUSH_STACK COLOR 8 a0
-    # sw ra, RA(sp)
-    # sw a0, COLOR(sp)
-
+    addi sp, sp, -16
+    .equ LCD_CLEAR_RA, 12
+    .equ LCD_CLEAR_COLOR, 8
+    sw ra, LCD_CLEAR_RA(sp)
+    sw a0, LCD_CLEAR_COLOR(sp)
     li a0, 0
     li a1, SCREEN_WIDTH - 1
     li a2, 0
     li a3, SCREEN_HEIGHT - 1
     call set_window
 
-    lw a0, COLOR(sp)
+    lw a0, LCD_CLEAR_COLOR(sp)
     li a1, SCREEN_WIDTH * SCREEN_HEIGHT
     call write_color
 
-    EXIT_STACK
+    lw ra, LCD_CLEAR_RA(sp)
+    addi sp, sp, 16
     ret
 
 # a0=x, a1=y, a2=width, a3=height, a4=RGB565.
 fill_rect:
-    INIT_STACK 32
-    PUSH_STACK RA 28 ra
-    PUSH_STACK WIDTH 24 a2
-    PUSH_STACK HEIGHT 20 a3
-    PUSH_STACK COLOR 16 a4
+    addi sp, sp, -32
+    .equ FILL_RECT_RA, 28
+    .equ FILL_RECT_WIDTH, 24
+    .equ FILL_RECT_HEIGHT, 20
+    .equ FILL_RECT_COLOR, 16
+    sw ra, FILL_RECT_RA(sp)
+    sw a2, FILL_RECT_WIDTH(sp)
+    sw a3, FILL_RECT_HEIGHT(sp)
+    sw a4, FILL_RECT_COLOR(sp)
 
     add t0, a0, a2
     addi t0, t0, -1
@@ -134,113 +138,259 @@ fill_rect:
     mv a1, t0
     mv a3, t1
     call set_window
-    lw a0, COLOR(sp)
-    lw t0, WIDTH(sp)
-    lw t1, HEIGHT(sp)
+    lw a0, FILL_RECT_COLOR(sp)
+    lw t0, FILL_RECT_WIDTH(sp)
+    lw t1, FILL_RECT_HEIGHT(sp)
     mul a1, t0, t1
     call write_color
 
-    EXIT_STACK 
+    lw ra, FILL_RECT_RA(sp)
+    addi sp, sp, 32
+    ret
+
+
+# a0=x, a1=y, a2=NUL-terminated ASCII, a3=colortable, a4=scale.
+# Each glyph uses the next RGB565 entry, wrapping at the end of the table.
+draw_rainbow_string:
+    addi sp, sp, -48
+    .equ RAINBOW_STRING_RA, 44
+    .equ RAINBOW_STRING_X, 40
+    .equ RAINBOW_STRING_Y, 36
+    .equ RAINBOW_STRING_TEXT, 32
+    .equ RAINBOW_STRING_COLORS, 28
+    .equ RAINBOW_STRING_SCALE, 24
+    .equ RAINBOW_CURRENT_COLOR_PTR, 20
+    sw ra, RAINBOW_STRING_RA(sp)
+    sw a0, RAINBOW_STRING_X(sp)
+    sw a1, RAINBOW_STRING_Y(sp)
+    sw a2, RAINBOW_STRING_TEXT(sp)
+    sw a3, RAINBOW_STRING_COLORS(sp)
+    sw a4, RAINBOW_STRING_SCALE(sp)
+    sw a3, RAINBOW_CURRENT_COLOR_PTR(sp)
+
+0:
+    lw t0, RAINBOW_STRING_TEXT(sp)
+    lbu t1, 0(t0)
+    beqz t1, 2f
+    lw a0, RAINBOW_STRING_X(sp)
+    lw a1, RAINBOW_STRING_Y(sp)
+    lw a2, RAINBOW_CURRENT_COLOR_PTR(sp)
+    lw a3, RAINBOW_STRING_SCALE(sp)
+    mv a4, t1
+    call draw_rainbow_char
+    sw a0, RAINBOW_CURRENT_COLOR_PTR(sp)
+
+    lw t0, RAINBOW_STRING_SCALE(sp)
+    li t1, 6
+    mul t1, t1, t0             # five glyph columns plus one spacing column
+    lw t2, RAINBOW_STRING_X(sp)
+    add t2, t2, t1
+    sw t2, RAINBOW_STRING_X(sp)
+    lw t0, RAINBOW_STRING_TEXT(sp)
+    addi t0, t0, 1
+    sw t0, RAINBOW_STRING_TEXT(sp)
+    j 0b
+2:
+    lw a0, RAINBOW_CURRENT_COLOR_PTR(sp)
+    lw ra, RAINBOW_STRING_RA(sp)
+    addi sp, sp, 48
     ret
 
 # a0=x, a1=y, a2=NUL-terminated ASCII, a3=color, a4=scale.
 draw_string:
-    INIT_STACK 48
-    PUSH_STACK RA 44 ra
-    PUSH_STACK X 40 a0
-    PUSH_STACK Y 36 a1
-    PUSH_STACK STRING 32 a2
-    PUSH_STACK COLOR 28 a3
-    PUSH_STACK SCALE 24 a4
+    addi sp, sp, -48
+    .equ DRAW_STRING_RA, 44
+    .equ DRAW_STRING_X, 40
+    .equ DRAW_STRING_Y, 36
+    .equ DRAW_STRING_TEXT, 32
+    .equ DRAW_STRING_COLOR, 28
+    .equ DRAW_STRING_SCALE, 24
+    sw ra, DRAW_STRING_RA(sp)
+    sw a0, DRAW_STRING_X(sp)
+    sw a1, DRAW_STRING_Y(sp)
+    sw a2, DRAW_STRING_TEXT(sp)
+    sw a3, DRAW_STRING_COLOR(sp)
+    sw a4, DRAW_STRING_SCALE(sp)
 0:
-    lw t0, STRING(sp)
+    lw t0, DRAW_STRING_TEXT(sp)
     lbu t1, 0(t0)
     beqz t1, 2f
-    lw a0, 40(sp)
-    lw a1, Y(sp)
-    lw a2, COLOR(sp)
-    lw a3, SCALE(sp)
+    lw a0, DRAW_STRING_X(sp)
+    lw a1, DRAW_STRING_Y(sp)
+    lw a2, DRAW_STRING_COLOR(sp)
+    lw a3, DRAW_STRING_SCALE(sp)
     mv a4, t1
     call draw_char
-    lw t0, SCALE(sp)
+    lw t0, DRAW_STRING_SCALE(sp)
     li t1, 6
     mul t1, t1, t0             # five glyph columns plus one spacing column
-    lw t2, X(sp)
+    lw t2, DRAW_STRING_X(sp)
     add t2, t2, t1
-    sw t2, X(sp)
-    lw t0, STRING(sp)
+    sw t2, DRAW_STRING_X(sp)
+    lw t0, DRAW_STRING_TEXT(sp)
     addi t0, t0, 1
-    sw t0, STRING(sp)
+    sw t0, DRAW_STRING_TEXT(sp)
     j 0b
 2:
-    EXIT_STACK 
+    lw ra, DRAW_STRING_RA(sp)
+    addi sp, sp, 48
     ret
 
-# a0=x, a1=y, a2=color, a3=scale, a4=ASCII. Font is 5 columns x 7 rows.
-draw_char:
-    INIT_STACK 64
-    PUSH_STACK RA 60 ra
-    PUSH_STACK X 56 a0
-    PUSH_STACK Y 52 a1
-    PUSH_STACK COLOR 48 a2
-    PUSH_STACK SCALE 44 a3
-    .equ FONT_PTR, 40
-    .equ COL_PTR, 36
-    .equ ROW_PTR, 32
-    .equ SRC_PTR, 28
+# a0=x, a1=y, a2=current colortable pointer, a3=scale, a4=ASCII.
+# Each glyph column uses one color-table entry. Returns the next entry in a0.
+draw_rainbow_char:
+    addi sp, sp, -64
+    .equ RAINBOW_CHAR_RA, 60
+    .equ RAINBOW_CHAR_X, 56
+    .equ RAINBOW_CHAR_Y, 52
+    .equ RAINBOW_CHAR_COLOR_PTR, 48
+    .equ RAINBOW_CHAR_SCALE, 44
+    .equ RAINBOW_CHAR_FONT_PTR, 40
+    .equ RAINBOW_CHAR_COL_PTR, 36
+    .equ RAINBOW_CHAR_ROW_PTR, 32
+    .equ RAINBOW_CHAR_SRC_PTR, 28
+    sw ra, RAINBOW_CHAR_RA(sp)
+    sw a0, RAINBOW_CHAR_X(sp)
+    sw a1, RAINBOW_CHAR_Y(sp)
+    sw a2, RAINBOW_CHAR_COLOR_PTR(sp)
+    sw a3, RAINBOW_CHAR_SCALE(sp)
 
     addi a4, a4, -32
     li t0, 5
     mul a4, a4, t0
     la t1, font5x7
     add t1, t1, a4
-    sw t1, FONT_PTR(sp)
+    sw t1, RAINBOW_CHAR_FONT_PTR(sp)
     li t0, 0
-    sw t0, COL_PTR(sp)              # column
+    sw t0, RAINBOW_CHAR_COL_PTR(sp)              # column
 0:
-    lw t0, COL_PTR(sp)
+    lw t0, RAINBOW_CHAR_COL_PTR(sp)
     li t1, 5
     bge t0, t1, 4f
-    lw t1, FONT_PTR(sp)
+    lw t1, RAINBOW_CHAR_FONT_PTR(sp)
     add t1, t1, t0
     lbu t1, 0(t1)
-    sw t1, SRC_PTR(sp)
+    sw t1, RAINBOW_CHAR_SRC_PTR(sp)
     li t2, 0
-    sw t2, ROW_PTR(sp)              # row
+    sw t2, RAINBOW_CHAR_ROW_PTR(sp)              # row
 1:
-    lw t2, ROW_PTR(sp)
+    lw t2, RAINBOW_CHAR_ROW_PTR(sp)
     li t3, 7
     bge t2, t3, 3f
-    lw t1, SRC_PTR(sp)
+    lw t1, RAINBOW_CHAR_SRC_PTR(sp)
     li t3, 1
     sll t3, t3, t2
     and t3, t3, t1
     beqz t3, 2f
-    lw t3, X(sp)
-    lw t4, COL_PTR(sp)
-    lw t5, SCALE(sp)
+    lw t3, RAINBOW_CHAR_X(sp)
+    lw t4, RAINBOW_CHAR_COL_PTR(sp)
+    lw t5, RAINBOW_CHAR_SCALE(sp)
     mul t4, t4, t5
     add a0, t3, t4
-    lw t3, Y(sp)
-    lw t4, ROW_PTR(sp)
+    lw t3, RAINBOW_CHAR_Y(sp)
+    lw t4, RAINBOW_CHAR_ROW_PTR(sp)
     mul t4, t4, t5
     add a1, t3, t4
     mv a2, t5
     mv a3, t5
-    lw a4, COLOR(sp)
+    lw t6, RAINBOW_CHAR_COLOR_PTR(sp)
+    lhu a4, 0(t6)
     call fill_rect
+
 2:
-    lw t2, ROW_PTR(sp)
+    lw t2, RAINBOW_CHAR_ROW_PTR(sp)
     addi t2, t2, 1
-    sw t2, ROW_PTR(sp)
+    sw t2, RAINBOW_CHAR_ROW_PTR(sp)
     j 1b
 3:
-    lw t0, COL_PTR(sp)
+    lw t6, RAINBOW_CHAR_COLOR_PTR(sp)
+    addi t6, t6, 2
+    la t0, rainbow_colors_end
+    bltu t6, t0, 5f
+    la t6, rainbow_colors
+5:
+    sw t6, RAINBOW_CHAR_COLOR_PTR(sp)
+    lw t0, RAINBOW_CHAR_COL_PTR(sp)
     addi t0, t0, 1
-    sw t0, COL_PTR(sp)
+    sw t0, RAINBOW_CHAR_COL_PTR(sp)
     j 0b
 4:
-    EXIT_STACK 
+    lw a0, RAINBOW_CHAR_COLOR_PTR(sp)
+    lw ra, RAINBOW_CHAR_RA(sp)
+    addi sp, sp, 64
+    ret
+
+# a0=x, a1=y, a2=color, a3=scale, a4=ASCII. Font is 5 columns x 7 rows.
+draw_char:
+    addi sp, sp, -64
+    .equ DRAW_CHAR_RA, 60
+    .equ DRAW_CHAR_X, 56
+    .equ DRAW_CHAR_Y, 52
+    .equ DRAW_CHAR_COLOR, 48
+    .equ DRAW_CHAR_SCALE, 44
+    .equ DRAW_CHAR_FONT_PTR, 40
+    .equ DRAW_CHAR_COL_PTR, 36
+    .equ DRAW_CHAR_ROW_PTR, 32
+    .equ DRAW_CHAR_SRC_PTR, 28
+    sw ra, DRAW_CHAR_RA(sp)
+    sw a0, DRAW_CHAR_X(sp)
+    sw a1, DRAW_CHAR_Y(sp)
+    sw a2, DRAW_CHAR_COLOR(sp)
+    sw a3, DRAW_CHAR_SCALE(sp)
+
+    addi a4, a4, -32
+    li t0, 5
+    mul a4, a4, t0
+    la t1, font5x7
+    add t1, t1, a4
+    sw t1, DRAW_CHAR_FONT_PTR(sp)
+    li t0, 0
+    sw t0, DRAW_CHAR_COL_PTR(sp)              # column
+0:
+    lw t0, DRAW_CHAR_COL_PTR(sp)
+    li t1, 5
+    bge t0, t1, 4f
+    lw t1, DRAW_CHAR_FONT_PTR(sp)
+    add t1, t1, t0
+    lbu t1, 0(t1)
+    sw t1, DRAW_CHAR_SRC_PTR(sp)
+    li t2, 0
+    sw t2, DRAW_CHAR_ROW_PTR(sp)              # row
+1:
+    lw t2, DRAW_CHAR_ROW_PTR(sp)
+    li t3, 7
+    bge t2, t3, 3f
+    lw t1, DRAW_CHAR_SRC_PTR(sp)
+    li t3, 1
+    sll t3, t3, t2
+    and t3, t3, t1
+    beqz t3, 2f
+    lw t3, DRAW_CHAR_X(sp)
+    lw t4, DRAW_CHAR_COL_PTR(sp)
+    lw t5, DRAW_CHAR_SCALE(sp)
+    mul t4, t4, t5
+    add a0, t3, t4
+    lw t3, DRAW_CHAR_Y(sp)
+    lw t4, DRAW_CHAR_ROW_PTR(sp)
+    mul t4, t4, t5
+    add a1, t3, t4
+    mv a2, t5
+    mv a3, t5
+    lw a4, DRAW_CHAR_COLOR(sp)
+    call fill_rect
+2:
+    lw t2, DRAW_CHAR_ROW_PTR(sp)
+    addi t2, t2, 1
+    sw t2, DRAW_CHAR_ROW_PTR(sp)
+    j 1b
+3:
+    lw t0, DRAW_CHAR_COL_PTR(sp)
+    addi t0, t0, 1
+    sw t0, DRAW_CHAR_COL_PTR(sp)
+    j 0b
+4:
+    lw ra, DRAW_CHAR_RA(sp)
+    addi sp, sp, 64
     ret
 
 # a0=milliseconds. CLK_SYS is configured to 150 MHz by clocks_init.
