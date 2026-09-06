@@ -34,7 +34,7 @@ asm_flags = "-march=rv32imac_zicsr_zifencei_zba_zbb_zbs_zbkb -mabi=ilp32 -fno-pi
 
 [tasks.link]
 description = "Assemble and link standalone RP2350 RISC-V ELF"
-sources = ["src/rp2350-riscv.ld", "src/**/*.S", "src/**/*.inc"]
+sources = ["src/rp2350-riscv.ld", "src/**/*.S", "src/**/*.h", "src/**/*.inc"]
 outputs = ["{{vars.elf}}", "{{vars.map}}"]
 run = [
   "mkdir -p {{vars.build_dir}}",
@@ -85,9 +85,8 @@ sleep 1
   -ex 'target extended-remote :3333' \
   -ex 'monitor halt' \
   -ex 'load' \
-  -ex 'set $sp = 0x20001000' \
-  -ex 'set $pc = _reset_handler' \
-  -ex 'monitor resume' \
+  -ex 'compare-sections' \
+  -ex 'monitor reset run' \
   -ex 'detach'
 """
 
