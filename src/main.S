@@ -11,7 +11,7 @@ main:
     la a0, console_boot_message
     call uart_write_string
 
-    li a0, 01000                 # RGB565 navy background
+    li a0, 0xffbb                 # RGB565 dark grey
     call lcd_clear
 
     la s1, rainbow_colors         # colortable ptr
