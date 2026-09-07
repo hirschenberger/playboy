@@ -1,12 +1,14 @@
 #include "rp2350.h"
 
 .global lcd_init, set_window
+.extern uart_init
 
 lcd_init:
     addi sp, sp, -16
     .equ LCD_INIT_RA, 12
     sw ra, LCD_INIT_RA(sp)
     call clocks_init
+    call uart_init
     call lcd_gpio_init
     call spi1_init
     call st7789_init

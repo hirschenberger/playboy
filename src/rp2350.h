@@ -4,12 +4,14 @@
 .equ CLOCKS_BASE,         0x40010000
 .equ XOSC_BASE,           0x40048000
 .equ PLL_SYS_BASE,        0x40050000
+.equ UART0_BASE,          0x40070000
 .equ SPI1_BASE,           0x40088000
 .equ SIO_BASE,            0xd0000000
 
 .equ RESETS_RESET,        0x00
 .equ RESETS_RESET_DONE,   0x08
 .equ RESETS_SPI1_BIT,     0x00080000
+.equ RESETS_UART0_BIT,    0x04000000
 .equ RESETS_PLL_SYS_BIT,  0x00004000
 .equ CLOCKS_CLK_REF_CTRL, 0x30
 .equ CLOCKS_CLK_REF_SELECTED, 0x38
@@ -42,6 +44,7 @@
 .equ GPIO_CTRL_BASE,      0x04
 .equ GPIO_CTRL_STRIDE,    0x08
 .equ GPIO_FUNC_SPI1,      0x01
+.equ GPIO_FUNC_UART,      0x02
 .equ GPIO_FUNC_SIO,       0x05
 .equ PADS_GPIO_BASE,      0x04
 .equ PADS_GPIO_STRIDE,    0x04
@@ -63,6 +66,20 @@
 .equ SPI_SR_RNE,          0x04
 .equ SPI_SR_BSY,          0x10
 
+.equ UART_DR,             0x00
+.equ UART_FR,             0x18
+.equ UART_IBRD,           0x24
+.equ UART_FBRD,           0x28
+.equ UART_LCR_H,          0x2c
+.equ UART_CR,             0x30
+.equ UART_FR_TXFF,        0x20
+.equ UART_LCR_H_WLEN_8,   0x60
+.equ UART_CR_ENABLE_TX,   0x101
+.equ UART0_IBRD_115200,   81
+.equ UART0_FBRD_115200,   24
+
+.equ UART_TX_PIN,         0
+.equ UART_RX_PIN,         1
 .equ LCD_DC_PIN,          8
 .equ LCD_CS_PIN,          9
 .equ LCD_SCK_PIN,         10

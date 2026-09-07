@@ -60,15 +60,31 @@ The resulting files are:
 | `build/playboy.map` | flash/RAM linker map |
 | `build/playboy.dis` | produced by `mise run disassemble` |
 
-`mise run flash` builds the image, uses SWD to program and verify the ELF, and
-starts core 0 at its RISC-V reset handler. Its OpenOCD log is written to
-`build/openocd.log`.
+`mise run flash` builds the image and prefers Boot ROM programming when the
+Pico is in BOOTSEL mode. It writes the UF2 and selects the RISC-V CPU in that
+case. Otherwise it uses SWD to program and verify the ELF. Its OpenOCD log is
+written to `build/openocd.log`. If the board was last booted as ARM, enter
+BOOTSEL mode and run `mise run flash`; the task will switch it back to RISC-V.
 
 To start an interactive GDB session over SWD:
 
 ```sh
 mise run debug
 ```
+
+## UART console
+
+UART0 logs are transmitted at 115200 8-N-1 through the Debug Probe. Connect
+Pico GP0 (UART0 TX) to the probe's UART RX and connect GND between them. The
+debug probe on this host appears as `/dev/ttyACM0`; read the boot message with:
+
+```sh
+mise run console
+```
+
+`uart_write_string` accepts a NUL-terminated address in `a0`, and
+`uart_write_byte` accepts one byte in `a0`. Both may be called from assembly
+after `lcd_init`.
 
 The first debugger setup runs `mise run setup-debugger`, which builds Raspberry
 Pi's OpenOCD fork in `.tools/openocd-rp2350`; Debian's stock OpenOCD package
@@ -81,6 +97,8 @@ direction as the LCD microSD slot.
 
 | GPIO | Signal | Use |
 |---:|---|---|
+| GP0 | UART0 TX | Debug Probe console output |
+| GP1 | UART0 RX | optional Debug Probe console input |
 | GP8 | LCD_DC | command/data selection |
 | GP9 | LCD_CS | LCD active-low chip select |
 | GP10 | LCD_CLK | SPI1 clock |

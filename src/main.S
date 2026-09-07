@@ -8,6 +8,9 @@
 main:
     call lcd_init
 
+    la a0, console_boot_message
+    call uart_write_string
+
     li a0, 01000                 # RGB565 navy background
     call lcd_clear
 
@@ -407,6 +410,11 @@ delay_ms:
     ret
 
 .section .rodata
+console_boot_message:
+    .ascii  "**************************************\n"
+    .ascii  "* Pico 2 RISC-V LCD firmware started *\n"
+    .asciz  "**************************************\n"
+
 hello_text:
     # .asciz "KOPF HOCH VALLI!"
     .asciz "  HALLO JANNIS  "

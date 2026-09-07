@@ -17,6 +17,7 @@ uf2 = "{{vars.build_dir}}/{{vars.image_name}}.uf2"
 map = "{{vars.build_dir}}/{{vars.image_name}}.map"
 disassembly = "{{vars.build_dir}}/{{vars.image_name}}.dis"
 openocd_log = "{{vars.build_dir}}/openocd.log"
+serial_device = "/dev/ttyACM0"
 asm_flags = "-march=rv32imac_zicsr_zifencei_zba_zbb_zbs_zbkb -mabi=ilp32 -fno-pic -I src"
 
 [bootstrap.packages]
@@ -71,18 +72,28 @@ make -j$(nproc)
 """
 
 [tasks.flash]
-description = "Flash and start the RISC-V ELF through the CMSIS-DAP SWD probe"
+description = "Flash through BOOTSEL when available, otherwise use RISC-V CMSIS-DAP SWD"
 depends = ["build", "setup-debugger"]
 run = """
 set -eu
 mkdir -p {{vars.build_dir}}
+if picotool info >/dev/null 2>&1; then
+  echo "Pico detected in BOOTSEL mode; programming the RISC-V UF2 through Boot ROM."
+  picotool load {{vars.uf2}}
+  picotool reboot --application --cpu riscv
+  exit 0
+fi
 {{vars.openocd}} -s {{vars.openocd_scripts}} -f interface/cmsis-dap.cfg -c 'adapter speed 1000' -f target/rp2350-riscv.cfg > {{vars.openocd_log}} 2>&1 &
 openocd_pid=$!
 trap 'kill "$openocd_pid" 2>/dev/null || true; wait "$openocd_pid" 2>/dev/null || true' EXIT
 sleep 1
+if grep -Fq '[rp2350.rv0] unavailable' {{vars.openocd_log}}; then
+  echo "RISC-V cores are unavailable. Hold BOOTSEL while connecting the Pico, then rerun mise run flash." >&2
+  exit 1
+fi
 {{vars.gdb}} --batch --quiet --nx {{vars.elf}} \
   -ex 'set architecture riscv:rv32' \
-  -ex 'target extended-remote :3333' \
+  -ex 'target remote :3333' \
   -ex 'monitor halt' \
   -ex 'load' \
   -ex 'compare-sections' \
@@ -104,6 +115,11 @@ sleep 1
 {{vars.gdb}} {{vars.elf}} -ex 'set architecture riscv:rv32' -ex 'target extended-remote :3333' -ex 'monitor halt' -ex 'layout src' -ex 'layout regs'
 reset
 """
+
+[tasks.console]
+description = "Read UART0 logs from the Raspberry Pi Debug Probe"
+raw = true
+run = "stty -F {{vars.serial_device}} 115200 cs8 -cstopb -parenb -ixon -ixoff && cat {{vars.serial_device}}"
 
 [tasks.inspect]
 description = "Inspect ELF and UF2 target metadata"
