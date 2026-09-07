@@ -408,7 +408,8 @@ delay_ms:
 
 .section .rodata
 hello_text:
-    .asciz "KOPF HOCH VALLI!"
+    # .asciz "KOPF HOCH VALLI!"
+    .asciz "  HALLO JANNIS  "
 
 # Printable ASCII 0x20 through 0x5a; columns are LSB-top bitmap data.
 font5x7:
