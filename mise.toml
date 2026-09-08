@@ -91,14 +91,41 @@ if grep -Fq '[rp2350.rv0] unavailable' {{vars.openocd_log}}; then
   echo "RISC-V cores are unavailable. Hold BOOTSEL while connecting the Pico, then rerun mise run flash." >&2
   exit 1
 fi
-{{vars.gdb}} --batch --quiet --nx {{vars.elf}} \
+if grep -F '[rp2350.rv0]' {{vars.openocd_log}} | grep -Eq 'Examination failed|failed to halt|Failed to read|Target not examined'; then
+  echo "RISC-V core 0 could not be examined over SWD. Hold BOOTSEL while connecting the Pico, then rerun mise run flash." >&2
+  exit 1
+fi
+set +e
+gdb_output=$({{vars.gdb}} --batch --quiet --nx {{vars.elf}} \
   -ex 'set architecture riscv:rv32' \
   -ex 'target remote :3333' \
   -ex 'monitor halt' \
   -ex 'load' \
   -ex 'compare-sections' \
-  -ex 'monitor reset run' \
-  -ex 'detach'
+  -ex 'monitor reset run' 2>&1)
+gdb_status=$?
+set -e
+printf '%s\n' "$gdb_output"
+if grep -F '[rp2350.rv0]' {{vars.openocd_log}} | grep -Eq 'Examination failed|failed to halt|Failed to read|Target not examined'; then
+  echo "RISC-V core 0 could not be examined over SWD. Hold BOOTSEL while connecting the Pico, then rerun mise run flash." >&2
+  exit 1
+fi
+if grep -Fq "attempted 'gdb' connection rejected" {{vars.openocd_log}}; then
+  echo "RISC-V core 0 could not be examined over SWD. Hold BOOTSEL while connecting the Pico, then rerun mise run flash." >&2
+  exit 1
+fi
+if ! printf '%s\n' "$gdb_output" | grep -F 'Section .picobin,' | grep -Fq ': matched.'; then
+  exit "$gdb_status"
+fi
+if ! printf '%s\n' "$gdb_output" | grep -F 'Section .text,' | grep -Fq ': matched.'; then
+  exit "$gdb_status"
+fi
+if printf '%s\n' "$gdb_output" | grep -Eq 'MIS-MATCHED|FAILED'; then
+  exit 1
+fi
+if test "$gdb_status" -ne 0; then
+  echo "GDB connection closed after reset; flash verification succeeded."
+fi
 """
 
 [tasks.debug]

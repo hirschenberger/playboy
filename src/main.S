@@ -417,7 +417,7 @@ console_boot_message:
 
 hello_text:
     # .asciz "KOPF HOCH VALLI!"
-    .asciz "  HALLO JANNIS  "
+    .asciz   "   TAKE FIVE    "
 
 # Printable ASCII 0x20 through 0x5a; columns are LSB-top bitmap data.
 font5x7:
