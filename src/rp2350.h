@@ -6,11 +6,14 @@
 .equ PLL_SYS_BASE,        0x40050000
 .equ UART0_BASE,          0x40070000
 .equ SPI1_BASE,           0x40088000
+.equ TIMER0_BASE,         0x400b0000
+.equ TICKS_BASE,          0x40108000
 .equ SIO_BASE,            0xd0000000
 
 .equ RESETS_RESET,        0x00
 .equ RESETS_RESET_DONE,   0x08
 .equ RESETS_SPI1_BIT,     0x00080000
+.equ RESETS_TIMER0_BIT,   0x00800000
 .equ RESETS_UART0_BIT,    0x04000000
 .equ RESETS_PLL_SYS_BIT,  0x00004000
 .equ CLOCKS_CLK_REF_CTRL, 0x30
@@ -65,6 +68,16 @@
 .equ SPI_SR_TNF,          0x02
 .equ SPI_SR_RNE,          0x04
 .equ SPI_SR_BSY,          0x10
+
+.equ TIMER_TIMEHR,        0x08
+.equ TIMER_TIMELR,        0x0c
+.equ TIMER_SOURCE,        0x38
+.equ TIMER_SOURCE_TICK,   0x00
+
+.equ TICKS_TIMER0_CTRL,   0x18
+.equ TICKS_TIMER0_CYCLES, 0x1c
+.equ TICKS_TIMER0_ENABLE, 0x01
+.equ TICKS_TIMER0_1US,    12
 
 .equ UART_DR,             0x00
 .equ UART_FR,             0x18

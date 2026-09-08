@@ -24,8 +24,8 @@ versioned.
    end in a `wfi` loop. `_trap_handler` also exists, but the current code does
    not install it through `mtvec`; the firmware therefore does not define the
    actual trap destination.
-3. `lcd_init` in `src/lcd.S` initializes the clock tree, UART0, LCD GPIO,
-   SPI1, and the ST7789VW in that order.
+3. `lcd_init` in `src/lcd.S` initializes the clock tree, TIMER0, UART0, LCD
+   GPIO, SPI1, and the ST7789VW in that order.
 4. `main` in `src/main.S` writes the UART boot message, clears the screen, and
    draws bars and rainbow text in an infinite loop.
 5. Drawing flow: `draw_rainbow_string` -> `draw_rainbow_char` -> `fill_rect`
@@ -53,6 +53,8 @@ versioned.
   vendor-specific ST7789VW initialization sequence.
 - `src/main.S`: frame loop, rectangle/text renderers, font, and RGB565
   gradient.
+- `src/timer.S`: TIMER0 reset release, 1 us tick setup through the RP2350
+  TICKS block, and a blocking-free `timer0_read_us` helper.
 - `src/uart.S`: UART0 at 115200 8-N-1 on GP0/GP1 and blocking output.
 - `.asm-lsp.toml`: RISC-V flags for `asm-lsp`. It names unversioned `clang`,
   not `clang-19`, so editor diagnostics can differ from the actual build.
@@ -78,6 +80,9 @@ versioned.
   on the available hardware; do not increase this without an explicit request
   and hardware testing.
 - UART divisors 81/24 require `CLK_PERI=150 MHz`.
+- TIMER0 uses its dedicated TICKS slice with 12 XOSC cycles per tick, so
+  `timer0_read_us` returns a 64-bit microsecond counter since `timer0_init`
+  in `a1:a0`.
 - On RP2350, `RESETS_UART0_BIT` is bit 26 (`0x04000000`), not the
   corresponding RP2040 value.
 
