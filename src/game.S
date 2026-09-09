@@ -6,7 +6,7 @@
 .global gameloop
 .extern fp_div
 
-.equ TARGET_FPS, 100
+.equ TARGET_FPS, 60
 .equ FRAME_TIME_US, 1000 * 1000 / TARGET_FPS
 
 .equ MAP_WIDTH, 32
@@ -34,10 +34,17 @@ gameloop:
 
 
 
+# ***************************************************
 read_input:
         ret
 
+# ***************************************************
 game_update:
+        addi sp, sp, -16
+        sw ra, 12(sp)
+
+        lw ra, 12(sp)
+        addi sp, sp, 16
         ret
 
 # Register map:
@@ -206,16 +213,20 @@ wait_frame_time:
         sw ra, 12(sp)
         sw s0, 8(sp)
         sw s1, 4(sp)
+        sw s3, 0(sp)
 
         LOAD_WORD s0, frame_start_us       # Frame's start time
         li s1, FRAME_TIME_US               # Frame's allowed us
 
         # check if already expired and log that
         call timer0_read_us
-        sub t0, a0, s0                     # us already spent
-        ble t0, s1, .Lwait_next
+        sub s2, a0, s0                     # us already spent
+        ble s2, s1, .Lwait_next
 
         LOG_STRING framerate_delay_msg
+        mv a0, s2
+        call itoa
+        LOG_STRING_PTR a0
 
 .Lwait_next:
         call timer0_read_us
@@ -227,6 +238,7 @@ wait_frame_time:
         lw ra, 12(sp)
         lw s0, 8(sp)
         lw s1, 4(sp)
+        lw s2, 0(sp)
         addi sp, sp, 16
         ret
 
@@ -254,7 +266,7 @@ enter_gameloop_msg:
         .asciz "INFO: Enter gameloop"
 
 framerate_delay_msg:
-        .asciz "WARN: Framerate delay"
+        .asciz "WARN: Framerate delay by micosecs:"
 
 level1:
         .byte 1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1
