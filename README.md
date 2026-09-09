@@ -1,4 +1,5 @@
-# Pico 2 W RISC-V LCD Hello World
+# PLAYBOY
+## Baremetal Pico 2 W RISC-V assembly game experiments
 
 An SDK-free, bare-metal RISC-V assembly project for the Raspberry Pi Pico 2 W
 and Waveshare Pico-ResTouch-LCD-2.8. The target image owns its RP2350 picobin
