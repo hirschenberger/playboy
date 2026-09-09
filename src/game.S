@@ -158,6 +158,45 @@ render_frame:
 
         # DDA and wall projection will consume the s-register state above.
 
+        # a0: hit side
+
+.Ldda_loop:
+        bge s11, s7, .Lx_gt_y
+
+        add s11, s11, s7
+        add s5, s5, s9
+        li a0, 0
+
+.Lx_gt_y:
+        add s1, s1, s8
+        add s6, s6, s10
+        li a0, 1
+
+        # check ray wall hit
+        li t0, MAP_WIDTH
+        mul t0, s6, t0            # y * width
+        add t0, t0, s5            # + x
+
+        la t1, level1
+        lb t0, 0(t1)              # map entry
+        beqz t0, .Ldda_loop
+
+        # ****************************************
+        # distance projected on camera direction
+        li a1, FP_ZERO             # perpWallDist
+        beqz a0, .Lwall_x
+
+        sub a1, s1, s8
+.Lwall_x:
+        sub a1, s11, s8
+
+
+        # ****************************************
+        #  height of line
+
+
+        # TODO
+
         addi s0, s0, 1
         li t0, SCREEN_WIDTH
         blt s0, t0, .Lrender_column_loop
