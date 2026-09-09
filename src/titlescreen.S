@@ -4,17 +4,12 @@
 # a0: how many milliseconds to display
 draw_title:
         addi sp, sp, -32
-        .equ DRAW_TITLE_RA, 28
-        .equ DRAW_TITLE_S1, 24
-        .equ DRAW_TITLE_S2, 20
-        .equ DRAW_TITLE_S3, 16
-        .equ DRAW_TITLE_S4, 12
-        sw ra, DRAW_TITLE_RA(sp)
-        sw s1, DRAW_TITLE_S1(sp)
-        sw s2, DRAW_TITLE_S2(sp)
-        sw s3, DRAW_TITLE_S3(sp)
-        sw s4, DRAW_TITLE_S4(sp)
-      
+        sw ra, 28(sp)
+        sw s1, 24(sp)
+        sw s2, 20(sp)
+        sw s3, 16(sp)
+        sw s4, 12(sp)
+
         la s1, rainbow_colors         # colortable ptr
         la s2, rainbow_colors_end     # colortable end ptr
         mv s3, a0                     # display time in milliseconds
@@ -23,7 +18,7 @@ draw_title:
 
         call timer0_read_us
         mv s4, a0                     # start time, low word
-        
+
 1:
         li a0, 20
         li a1, 80
@@ -61,12 +56,12 @@ draw_title:
         call timer0_read_us
         sub t0, a0, s4
         bltu t0, s3, 1b
-        
-        lw s4, DRAW_TITLE_S4(sp)
-        lw s3, DRAW_TITLE_S3(sp)
-        lw s2, DRAW_TITLE_S2(sp)
-        lw s1, DRAW_TITLE_S1(sp)
-        lw ra, DRAW_TITLE_RA(sp)
+
+        lw ra, 28(sp)
+        lw s1, 24(sp)
+        lw s2, 20(sp)
+        lw s3, 16(sp)
+        lw s4, 12(sp)
         addi sp, sp, 32
         ret
 

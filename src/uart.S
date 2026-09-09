@@ -53,20 +53,19 @@ uart_write_byte:
 # a0=NUL-terminated string address.
 uart_write_string:
     addi sp, sp, -16
-    .equ UART_WRITE_STRING_RA, 12
-    .equ UART_WRITE_STRING_ADDRESS, 8
-    sw ra, UART_WRITE_STRING_RA(sp)
-    sw a0, UART_WRITE_STRING_ADDRESS(sp)
-1:
-    lw t0, UART_WRITE_STRING_ADDRESS(sp)
-    lbu a0, 0(t0)
-    beqz a0, 2f
+    sw ra, 12(sp)
+    sw s0, 8(sp)
+
+    mv s0, a0
+.Lnext_char:
+    lbu a0, 0(s0)
+    beqz a0, .Lfini
     call uart_write_byte
-    lw t0, UART_WRITE_STRING_ADDRESS(sp)
-    addi t0, t0, 1
-    sw t0, UART_WRITE_STRING_ADDRESS(sp)
-    j 1b
-2:
-    lw ra, UART_WRITE_STRING_RA(sp)
+    addi s0, s0, 1
+    j .Lnext_char
+
+.Lfini:
+    lw ra, 12(sp)
+    lw s0, 8(sp)
     addi sp, sp, 16
     ret
