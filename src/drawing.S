@@ -105,247 +105,315 @@ fill_rect:
 
 
 # a0=x, a1=y, a2=NUL-terminated ASCII, a3=colortable, a4=scale.
-# Each glyph uses the next RGB565 entry, wrapping at the end of the table.
+# Register map:
+#   s0 = current x
+#   s1 = y
+#   s2 = text pointer
+#   s3 = current color-table pointer
+#   s4 = scale
+#   s5 = glyph advance in pixels
+#   t0 = current ASCII byte
+# Returns the next color-table pointer in a0.
 draw_rainbow_string:
-    addi sp, sp, -48
-    .equ RAINBOW_STRING_RA, 44
-    .equ RAINBOW_STRING_X, 40
-    .equ RAINBOW_STRING_Y, 36
-    .equ RAINBOW_STRING_TEXT, 32
-    .equ RAINBOW_STRING_COLORS, 28
-    .equ RAINBOW_STRING_SCALE, 24
-    .equ RAINBOW_CURRENT_COLOR_PTR, 20
+    addi sp, sp, -32
+    .equ RAINBOW_STRING_RA, 28
+    .equ RAINBOW_STRING_S0, 24
+    .equ RAINBOW_STRING_S1, 20
+    .equ RAINBOW_STRING_S2, 16
+    .equ RAINBOW_STRING_S3, 12
+    .equ RAINBOW_STRING_S4, 8
+    .equ RAINBOW_STRING_S5, 4
     sw ra, RAINBOW_STRING_RA(sp)
-    sw a0, RAINBOW_STRING_X(sp)
-    sw a1, RAINBOW_STRING_Y(sp)
-    sw a2, RAINBOW_STRING_TEXT(sp)
-    sw a3, RAINBOW_STRING_COLORS(sp)
-    sw a4, RAINBOW_STRING_SCALE(sp)
-    sw a3, RAINBOW_CURRENT_COLOR_PTR(sp)
+    sw s0, RAINBOW_STRING_S0(sp)
+    sw s1, RAINBOW_STRING_S1(sp)
+    sw s2, RAINBOW_STRING_S2(sp)
+    sw s3, RAINBOW_STRING_S3(sp)
+    sw s4, RAINBOW_STRING_S4(sp)
+    sw s5, RAINBOW_STRING_S5(sp)
 
-0:
-    lw t0, RAINBOW_STRING_TEXT(sp)
-    lbu t1, 0(t0)
-    beqz t1, 2f
-    lw a0, RAINBOW_STRING_X(sp)
-    lw a1, RAINBOW_STRING_Y(sp)
-    lw a2, RAINBOW_CURRENT_COLOR_PTR(sp)
-    lw a3, RAINBOW_STRING_SCALE(sp)
-    mv a4, t1
+    mv s0, a0
+    mv s1, a1
+    mv s2, a2
+    mv s3, a3
+    mv s4, a4
+    li s5, 6
+    mul s5, s5, s4             # five glyph columns plus one spacing column
+
+.Lrainbow_string_loop:
+    lbu t0, 0(s2)
+    beqz t0, .Lrainbow_string_done
+
+    mv a0, s0
+    mv a1, s1
+    mv a2, s3
+    mv a3, s4
+    mv a4, t0
     call draw_rainbow_char
-    sw a0, RAINBOW_CURRENT_COLOR_PTR(sp)
+    mv s3, a0
 
-    lw t0, RAINBOW_STRING_SCALE(sp)
-    li t1, 6
-    mul t1, t1, t0             # five glyph columns plus one spacing column
-    lw t2, RAINBOW_STRING_X(sp)
-    add t2, t2, t1
-    sw t2, RAINBOW_STRING_X(sp)
-    lw t0, RAINBOW_STRING_TEXT(sp)
-    addi t0, t0, 1
-    sw t0, RAINBOW_STRING_TEXT(sp)
-    j 0b
-2:
-    lw a0, RAINBOW_CURRENT_COLOR_PTR(sp)
+    add s0, s0, s5
+    addi s2, s2, 1
+    j .Lrainbow_string_loop
+
+.Lrainbow_string_done:
+    mv a0, s3
+    lw s5, RAINBOW_STRING_S5(sp)
+    lw s4, RAINBOW_STRING_S4(sp)
+    lw s3, RAINBOW_STRING_S3(sp)
+    lw s2, RAINBOW_STRING_S2(sp)
+    lw s1, RAINBOW_STRING_S1(sp)
+    lw s0, RAINBOW_STRING_S0(sp)
     lw ra, RAINBOW_STRING_RA(sp)
-    addi sp, sp, 48
+    addi sp, sp, 32
     ret
 
 # a0=x, a1=y, a2=NUL-terminated ASCII, a3=color, a4=scale.
+# Register map:
+#   s0 = current x
+#   s1 = y
+#   s2 = text pointer
+#   s3 = color
+#   s4 = scale
+#   s5 = glyph advance in pixels
+#   t0 = current ASCII byte
 draw_string:
-    addi sp, sp, -48
-    .equ DRAW_STRING_RA, 44
-    .equ DRAW_STRING_X, 40
-    .equ DRAW_STRING_Y, 36
-    .equ DRAW_STRING_TEXT, 32
-    .equ DRAW_STRING_COLOR, 28
-    .equ DRAW_STRING_SCALE, 24
+    addi sp, sp, -32
+    .equ DRAW_STRING_RA, 28
+    .equ DRAW_STRING_S0, 24
+    .equ DRAW_STRING_S1, 20
+    .equ DRAW_STRING_S2, 16
+    .equ DRAW_STRING_S3, 12
+    .equ DRAW_STRING_S4, 8
+    .equ DRAW_STRING_S5, 4
     sw ra, DRAW_STRING_RA(sp)
-    sw a0, DRAW_STRING_X(sp)
-    sw a1, DRAW_STRING_Y(sp)
-    sw a2, DRAW_STRING_TEXT(sp)
-    sw a3, DRAW_STRING_COLOR(sp)
-    sw a4, DRAW_STRING_SCALE(sp)
-0:
-    lw t0, DRAW_STRING_TEXT(sp)
-    lbu t1, 0(t0)
-    beqz t1, 2f
-    lw a0, DRAW_STRING_X(sp)
-    lw a1, DRAW_STRING_Y(sp)
-    lw a2, DRAW_STRING_COLOR(sp)
-    lw a3, DRAW_STRING_SCALE(sp)
-    mv a4, t1
+    sw s0, DRAW_STRING_S0(sp)
+    sw s1, DRAW_STRING_S1(sp)
+    sw s2, DRAW_STRING_S2(sp)
+    sw s3, DRAW_STRING_S3(sp)
+    sw s4, DRAW_STRING_S4(sp)
+    sw s5, DRAW_STRING_S5(sp)
+
+    mv s0, a0
+    mv s1, a1
+    mv s2, a2
+    mv s3, a3
+    mv s4, a4
+    li s5, 6
+    mul s5, s5, s4             # five glyph columns plus one spacing column
+
+.Ldraw_string_loop:
+    lbu t0, 0(s2)
+    beqz t0, .Ldraw_string_done
+
+    mv a0, s0
+    mv a1, s1
+    mv a2, s3
+    mv a3, s4
+    mv a4, t0
     call draw_char
-    lw t0, DRAW_STRING_SCALE(sp)
-    li t1, 6
-    mul t1, t1, t0             # five glyph columns plus one spacing column
-    lw t2, DRAW_STRING_X(sp)
-    add t2, t2, t1
-    sw t2, DRAW_STRING_X(sp)
-    lw t0, DRAW_STRING_TEXT(sp)
-    addi t0, t0, 1
-    sw t0, DRAW_STRING_TEXT(sp)
-    j 0b
-2:
+
+    add s0, s0, s5
+    addi s2, s2, 1
+    j .Ldraw_string_loop
+
+.Ldraw_string_done:
+    lw s5, DRAW_STRING_S5(sp)
+    lw s4, DRAW_STRING_S4(sp)
+    lw s3, DRAW_STRING_S3(sp)
+    lw s2, DRAW_STRING_S2(sp)
+    lw s1, DRAW_STRING_S1(sp)
+    lw s0, DRAW_STRING_S0(sp)
     lw ra, DRAW_STRING_RA(sp)
-    addi sp, sp, 48
+    addi sp, sp, 32
     ret
 
 # a0=x, a1=y, a2=current colortable pointer, a3=scale, a4=ASCII.
 # Each glyph column uses one color-table entry. Returns the next entry in a0.
+# Register map:
+#   s0 = base x
+#   s1 = base y
+#   s2 = current color-table pointer
+#   s3 = scale
+#   s4 = font pointer
+#   s5 = glyph column
+#   s6 = glyph row
+#   s7 = current glyph column bitmap
+#   t0 = scratch
+#   t1 = scratch
 draw_rainbow_char:
-    addi sp, sp, -64
-    .equ RAINBOW_CHAR_RA, 60
-    .equ RAINBOW_CHAR_X, 56
-    .equ RAINBOW_CHAR_Y, 52
-    .equ RAINBOW_CHAR_COLOR_PTR, 48
-    .equ RAINBOW_CHAR_SCALE, 44
-    .equ RAINBOW_CHAR_FONT_PTR, 40
-    .equ RAINBOW_CHAR_COL_PTR, 36
-    .equ RAINBOW_CHAR_ROW_PTR, 32
-    .equ RAINBOW_CHAR_SRC_PTR, 28
+    addi sp, sp, -48
+    .equ RAINBOW_CHAR_RA, 44
+    .equ RAINBOW_CHAR_S0, 40
+    .equ RAINBOW_CHAR_S1, 36
+    .equ RAINBOW_CHAR_S2, 32
+    .equ RAINBOW_CHAR_S3, 28
+    .equ RAINBOW_CHAR_S4, 24
+    .equ RAINBOW_CHAR_S5, 20
+    .equ RAINBOW_CHAR_S6, 16
+    .equ RAINBOW_CHAR_S7, 12
     sw ra, RAINBOW_CHAR_RA(sp)
-    sw a0, RAINBOW_CHAR_X(sp)
-    sw a1, RAINBOW_CHAR_Y(sp)
-    sw a2, RAINBOW_CHAR_COLOR_PTR(sp)
-    sw a3, RAINBOW_CHAR_SCALE(sp)
+    sw s0, RAINBOW_CHAR_S0(sp)
+    sw s1, RAINBOW_CHAR_S1(sp)
+    sw s2, RAINBOW_CHAR_S2(sp)
+    sw s3, RAINBOW_CHAR_S3(sp)
+    sw s4, RAINBOW_CHAR_S4(sp)
+    sw s5, RAINBOW_CHAR_S5(sp)
+    sw s6, RAINBOW_CHAR_S6(sp)
+    sw s7, RAINBOW_CHAR_S7(sp)
 
+    mv s0, a0
+    mv s1, a1
+    mv s2, a2
+    mv s3, a3
     addi a4, a4, -32
     li t0, 5
     mul a4, a4, t0
-    la t1, font5x7
-    add t1, t1, a4
-    sw t1, RAINBOW_CHAR_FONT_PTR(sp)
-    li t0, 0
-    sw t0, RAINBOW_CHAR_COL_PTR(sp)              # column
-0:
-    lw t0, RAINBOW_CHAR_COL_PTR(sp)
-    li t1, 5
-    bge t0, t1, 4f
-    lw t1, RAINBOW_CHAR_FONT_PTR(sp)
-    add t1, t1, t0
-    lbu t1, 0(t1)
-    sw t1, RAINBOW_CHAR_SRC_PTR(sp)
-    li t2, 0
-    sw t2, RAINBOW_CHAR_ROW_PTR(sp)              # row
-1:
-    lw t2, RAINBOW_CHAR_ROW_PTR(sp)
-    li t3, 7
-    bge t2, t3, 3f
-    lw t1, RAINBOW_CHAR_SRC_PTR(sp)
-    li t3, 1
-    sll t3, t3, t2
-    and t3, t3, t1
-    beqz t3, 2f
-    lw t3, RAINBOW_CHAR_X(sp)
-    lw t4, RAINBOW_CHAR_COL_PTR(sp)
-    lw t5, RAINBOW_CHAR_SCALE(sp)
-    mul t4, t4, t5
-    add a0, t3, t4
-    lw t3, RAINBOW_CHAR_Y(sp)
-    lw t4, RAINBOW_CHAR_ROW_PTR(sp)
-    mul t4, t4, t5
-    add a1, t3, t4
-    mv a2, t5
-    mv a3, t5
-    lw t6, RAINBOW_CHAR_COLOR_PTR(sp)
-    lhu a4, 0(t6)
+    la s4, font5x7
+    add s4, s4, a4
+    li s5, 0
+
+.Lrainbow_char_col_loop:
+    li t0, 5
+    bge s5, t0, .Lrainbow_char_done
+
+    add t0, s4, s5
+    lbu s7, 0(t0)
+    li s6, 0
+
+.Lrainbow_char_row_loop:
+    li t0, 7
+    bge s6, t0, .Lrainbow_char_next_col
+
+    li t0, 1
+    sll t0, t0, s6
+    and t0, t0, s7
+    beqz t0, .Lrainbow_char_next_row
+
+    mul t0, s5, s3
+    add a0, s0, t0
+    mul t1, s6, s3
+    add a1, s1, t1
+    mv a2, s3
+    mv a3, s3
+    lhu a4, 0(s2)
     call fill_rect
 
-2:
-    lw t2, RAINBOW_CHAR_ROW_PTR(sp)
-    addi t2, t2, 1
-    sw t2, RAINBOW_CHAR_ROW_PTR(sp)
-    j 1b
-3:
-    lw t6, RAINBOW_CHAR_COLOR_PTR(sp)
-    addi t6, t6, 2
+.Lrainbow_char_next_row:
+    addi s6, s6, 1
+    j .Lrainbow_char_row_loop
+
+.Lrainbow_char_next_col:
+    addi s2, s2, 2
     la t0, rainbow_colors_end
-    bltu t6, t0, 5f
-    la t6, rainbow_colors
-5:
-    sw t6, RAINBOW_CHAR_COLOR_PTR(sp)
-    lw t0, RAINBOW_CHAR_COL_PTR(sp)
-    addi t0, t0, 1
-    sw t0, RAINBOW_CHAR_COL_PTR(sp)
-    j 0b
-4:
-    lw a0, RAINBOW_CHAR_COLOR_PTR(sp)
+    bltu s2, t0, .Lrainbow_char_color_ok
+    la s2, rainbow_colors
+.Lrainbow_char_color_ok:
+    addi s5, s5, 1
+    j .Lrainbow_char_col_loop
+
+.Lrainbow_char_done:
+    mv a0, s2
+    lw s7, RAINBOW_CHAR_S7(sp)
+    lw s6, RAINBOW_CHAR_S6(sp)
+    lw s5, RAINBOW_CHAR_S5(sp)
+    lw s4, RAINBOW_CHAR_S4(sp)
+    lw s3, RAINBOW_CHAR_S3(sp)
+    lw s2, RAINBOW_CHAR_S2(sp)
+    lw s1, RAINBOW_CHAR_S1(sp)
+    lw s0, RAINBOW_CHAR_S0(sp)
     lw ra, RAINBOW_CHAR_RA(sp)
-    addi sp, sp, 64
+    addi sp, sp, 48
     ret
 
 # a0=x, a1=y, a2=color, a3=scale, a4=ASCII. Font is 5 columns x 7 rows.
+# Register map:
+#   s0 = base x
+#   s1 = base y
+#   s2 = color
+#   s3 = scale
+#   s4 = font pointer
+#   s5 = glyph column
+#   s6 = glyph row
+#   s7 = current glyph column bitmap
+#   t0 = scratch
+#   t1 = scratch
 draw_char:
-    addi sp, sp, -64
-    .equ DRAW_CHAR_RA, 60
-    .equ DRAW_CHAR_X, 56
-    .equ DRAW_CHAR_Y, 52
-    .equ DRAW_CHAR_COLOR, 48
-    .equ DRAW_CHAR_SCALE, 44
-    .equ DRAW_CHAR_FONT_PTR, 40
-    .equ DRAW_CHAR_COL_PTR, 36
-    .equ DRAW_CHAR_ROW_PTR, 32
-    .equ DRAW_CHAR_SRC_PTR, 28
+    addi sp, sp, -48
+    .equ DRAW_CHAR_RA, 44
+    .equ DRAW_CHAR_S0, 40
+    .equ DRAW_CHAR_S1, 36
+    .equ DRAW_CHAR_S2, 32
+    .equ DRAW_CHAR_S3, 28
+    .equ DRAW_CHAR_S4, 24
+    .equ DRAW_CHAR_S5, 20
+    .equ DRAW_CHAR_S6, 16
+    .equ DRAW_CHAR_S7, 12
     sw ra, DRAW_CHAR_RA(sp)
-    sw a0, DRAW_CHAR_X(sp)
-    sw a1, DRAW_CHAR_Y(sp)
-    sw a2, DRAW_CHAR_COLOR(sp)
-    sw a3, DRAW_CHAR_SCALE(sp)
+    sw s0, DRAW_CHAR_S0(sp)
+    sw s1, DRAW_CHAR_S1(sp)
+    sw s2, DRAW_CHAR_S2(sp)
+    sw s3, DRAW_CHAR_S3(sp)
+    sw s4, DRAW_CHAR_S4(sp)
+    sw s5, DRAW_CHAR_S5(sp)
+    sw s6, DRAW_CHAR_S6(sp)
+    sw s7, DRAW_CHAR_S7(sp)
 
+    mv s0, a0
+    mv s1, a1
+    mv s2, a2
+    mv s3, a3
     addi a4, a4, -32
     li t0, 5
     mul a4, a4, t0
-    la t1, font5x7
-    add t1, t1, a4
-    sw t1, DRAW_CHAR_FONT_PTR(sp)
-    li t0, 0
-    sw t0, DRAW_CHAR_COL_PTR(sp)              # column
-0:
-    lw t0, DRAW_CHAR_COL_PTR(sp)
-    li t1, 5
-    bge t0, t1, 4f
-    lw t1, DRAW_CHAR_FONT_PTR(sp)
-    add t1, t1, t0
-    lbu t1, 0(t1)
-    sw t1, DRAW_CHAR_SRC_PTR(sp)
-    li t2, 0
-    sw t2, DRAW_CHAR_ROW_PTR(sp)              # row
-1:
-    lw t2, DRAW_CHAR_ROW_PTR(sp)
-    li t3, 7
-    bge t2, t3, 3f
-    lw t1, DRAW_CHAR_SRC_PTR(sp)
-    li t3, 1
-    sll t3, t3, t2
-    and t3, t3, t1
-    beqz t3, 2f
-    lw t3, DRAW_CHAR_X(sp)
-    lw t4, DRAW_CHAR_COL_PTR(sp)
-    lw t5, DRAW_CHAR_SCALE(sp)
-    mul t4, t4, t5
-    add a0, t3, t4
-    lw t3, DRAW_CHAR_Y(sp)
-    lw t4, DRAW_CHAR_ROW_PTR(sp)
-    mul t4, t4, t5
-    add a1, t3, t4
-    mv a2, t5
-    mv a3, t5
-    lw a4, DRAW_CHAR_COLOR(sp)
+    la s4, font5x7
+    add s4, s4, a4
+    li s5, 0
+
+.Ldraw_char_col_loop:
+    li t0, 5
+    bge s5, t0, .Ldraw_char_done
+
+    add t0, s4, s5
+    lbu s7, 0(t0)
+    li s6, 0
+
+.Ldraw_char_row_loop:
+    li t0, 7
+    bge s6, t0, .Ldraw_char_next_col
+
+    li t0, 1
+    sll t0, t0, s6
+    and t0, t0, s7
+    beqz t0, .Ldraw_char_next_row
+
+    mul t0, s5, s3
+    add a0, s0, t0
+    mul t1, s6, s3
+    add a1, s1, t1
+    mv a2, s3
+    mv a3, s3
+    mv a4, s2
     call fill_rect
-2:
-    lw t2, DRAW_CHAR_ROW_PTR(sp)
-    addi t2, t2, 1
-    sw t2, DRAW_CHAR_ROW_PTR(sp)
-    j 1b
-3:
-    lw t0, DRAW_CHAR_COL_PTR(sp)
-    addi t0, t0, 1
-    sw t0, DRAW_CHAR_COL_PTR(sp)
-    j 0b
-4:
+
+.Ldraw_char_next_row:
+    addi s6, s6, 1
+    j .Ldraw_char_row_loop
+
+.Ldraw_char_next_col:
+    addi s5, s5, 1
+    j .Ldraw_char_col_loop
+
+.Ldraw_char_done:
+    lw s7, DRAW_CHAR_S7(sp)
+    lw s6, DRAW_CHAR_S6(sp)
+    lw s5, DRAW_CHAR_S5(sp)
+    lw s4, DRAW_CHAR_S4(sp)
+    lw s3, DRAW_CHAR_S3(sp)
+    lw s2, DRAW_CHAR_S2(sp)
+    lw s1, DRAW_CHAR_S1(sp)
+    lw s0, DRAW_CHAR_S0(sp)
     lw ra, DRAW_CHAR_RA(sp)
-    addi sp, sp, 64
+    addi sp, sp, 48
     ret
 
 .section .rodata

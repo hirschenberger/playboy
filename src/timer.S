@@ -46,9 +46,8 @@ delay_ms:
     # start time
     li t0, TIMER0_BASE
     lw t2, TIMER_TIMELR(t0)
-1:
+.Lloop:
     lw t3, TIMER_TIMELR(t0)
     sub t3, t3, t2
-    bltu t3, t1, 1b
+    bltu t3, t1, .Lloop
     ret
-    

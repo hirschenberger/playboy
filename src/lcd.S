@@ -8,6 +8,7 @@ lcd_init:
     addi sp, sp, -16
     .equ LCD_INIT_RA, 12
     sw ra, LCD_INIT_RA(sp)
+
     call clocks_init
     call timer0_init
     call uart_init

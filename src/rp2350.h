@@ -1,3 +1,4 @@
+# -*- mode: Assembly -*-
 .equ IO_BANK0_BASE,       0x40028000
 .equ PADS_BANK0_BASE,     0x40038000
 .equ RESETS_BASE,         0x40020000

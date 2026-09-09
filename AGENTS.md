@@ -2,6 +2,10 @@
 
 ## Project Purpose and Scope
 
+I want to learn baremetal RISCV assember programming. Check for ideomatic
+assembler designpattern and implementation. Explain bad design decisions
+and implementations, show and explain how to do better.
+
 This repository contains SDK-free bare-metal firmware for the RP2350/Pico 2 W
 and the Waveshare Pico-ResTouch-LCD-2.8 (ST7789VW). The `.S` sources use GNU
 assembler syntax with the C preprocessor, but Clang 19 assembles them and LLD
