@@ -55,51 +55,56 @@ write_color:
 # a0=color. Clear all 320*240 pixels.
 lcd_clear:
     addi sp, sp, -16
-    .equ LCD_CLEAR_RA, 12
-    .equ LCD_CLEAR_COLOR, 8
-    sw ra, LCD_CLEAR_RA(sp)
-    sw a0, LCD_CLEAR_COLOR(sp)
+    sw ra, 12(sp)
+    sw s0, 8(sp)
+
+    mv s0, a0                           # save color
+
     li a0, 0
     li a1, SCREEN_WIDTH - 1
     li a2, 0
     li a3, SCREEN_HEIGHT - 1
     call set_window
 
-    lw a0, LCD_CLEAR_COLOR(sp)
+    mv a0, s0
     li a1, SCREEN_WIDTH * SCREEN_HEIGHT
     call write_color
 
-    lw ra, LCD_CLEAR_RA(sp)
+    lw ra, 12(sp)
+    lw s0, 8(sp)
     addi sp, sp, 16
     ret
 
 # a0=x, a1=y, a2=width, a3=height, a4=RGB565.
 fill_rect:
     addi sp, sp, -32
-    .equ FILL_RECT_RA, 28
-    .equ FILL_RECT_WIDTH, 24
-    .equ FILL_RECT_HEIGHT, 20
-    .equ FILL_RECT_COLOR, 16
-    sw ra, FILL_RECT_RA(sp)
-    sw a2, FILL_RECT_WIDTH(sp)
-    sw a3, FILL_RECT_HEIGHT(sp)
-    sw a4, FILL_RECT_COLOR(sp)
+    sw ra, 28(sp)
+    sw s0, 24(sp)
+    sw s1, 20(sp)
+    sw s2, 16(sp)
+
+    mv s0, a2                  # rect width
+    mv s1, a3                  # rect height
+    mv s2, a4                  # color
 
     add t0, a0, a2
     addi t0, t0, -1
     add t1, a1, a3
     addi t1, t1, -1
+
     mv a2, a1
     mv a1, t0
     mv a3, t1
     call set_window
-    lw a0, FILL_RECT_COLOR(sp)
-    lw t0, FILL_RECT_WIDTH(sp)
-    lw t1, FILL_RECT_HEIGHT(sp)
-    mul a1, t0, t1
+
+    mv a0, s2
+    mul a1, s0, s1             # width * height
     call write_color
 
-    lw ra, FILL_RECT_RA(sp)
+    lw ra, 28(sp)
+    lw s0, 24(sp)
+    lw s1, 20(sp)
+    lw s2, 16(sp)
     addi sp, sp, 32
     ret
 
@@ -116,20 +121,13 @@ fill_rect:
 # Returns the next color-table pointer in a0.
 draw_rainbow_string:
     addi sp, sp, -32
-    .equ RAINBOW_STRING_RA, 28
-    .equ RAINBOW_STRING_S0, 24
-    .equ RAINBOW_STRING_S1, 20
-    .equ RAINBOW_STRING_S2, 16
-    .equ RAINBOW_STRING_S3, 12
-    .equ RAINBOW_STRING_S4, 8
-    .equ RAINBOW_STRING_S5, 4
-    sw ra, RAINBOW_STRING_RA(sp)
-    sw s0, RAINBOW_STRING_S0(sp)
-    sw s1, RAINBOW_STRING_S1(sp)
-    sw s2, RAINBOW_STRING_S2(sp)
-    sw s3, RAINBOW_STRING_S3(sp)
-    sw s4, RAINBOW_STRING_S4(sp)
-    sw s5, RAINBOW_STRING_S5(sp)
+    sw ra, 28(sp)
+    sw s0, 24(sp)
+    sw s1, 20(sp)
+    sw s2, 16(sp)
+    sw s3, 12(sp)
+    sw s4, 8(sp)
+    sw s5, 4(sp)
 
     mv s0, a0
     mv s1, a1
@@ -157,13 +155,13 @@ draw_rainbow_string:
 
 .Lrainbow_string_done:
     mv a0, s3
-    lw s5, RAINBOW_STRING_S5(sp)
-    lw s4, RAINBOW_STRING_S4(sp)
-    lw s3, RAINBOW_STRING_S3(sp)
-    lw s2, RAINBOW_STRING_S2(sp)
-    lw s1, RAINBOW_STRING_S1(sp)
-    lw s0, RAINBOW_STRING_S0(sp)
-    lw ra, RAINBOW_STRING_RA(sp)
+    lw ra, 28(sp)
+    lw s0, 24(sp)
+    lw s1, 20(sp)
+    lw s2, 16(sp)
+    lw s3, 12(sp)
+    lw s4, 8(sp)
+    lw s5, 4(sp)
     addi sp, sp, 32
     ret
 
@@ -178,20 +176,13 @@ draw_rainbow_string:
 #   t0 = current ASCII byte
 draw_string:
     addi sp, sp, -32
-    .equ DRAW_STRING_RA, 28
-    .equ DRAW_STRING_S0, 24
-    .equ DRAW_STRING_S1, 20
-    .equ DRAW_STRING_S2, 16
-    .equ DRAW_STRING_S3, 12
-    .equ DRAW_STRING_S4, 8
-    .equ DRAW_STRING_S5, 4
-    sw ra, DRAW_STRING_RA(sp)
-    sw s0, DRAW_STRING_S0(sp)
-    sw s1, DRAW_STRING_S1(sp)
-    sw s2, DRAW_STRING_S2(sp)
-    sw s3, DRAW_STRING_S3(sp)
-    sw s4, DRAW_STRING_S4(sp)
-    sw s5, DRAW_STRING_S5(sp)
+    sw ra, 28(sp)
+    sw s0, 24(sp)
+    sw s1, 20(sp)
+    sw s2, 16(sp)
+    sw s3, 12(sp)
+    sw s4, 8(sp)
+    sw s5, 4(sp)
 
     mv s0, a0
     mv s1, a1
@@ -217,13 +208,13 @@ draw_string:
     j .Ldraw_string_loop
 
 .Ldraw_string_done:
-    lw s5, DRAW_STRING_S5(sp)
-    lw s4, DRAW_STRING_S4(sp)
-    lw s3, DRAW_STRING_S3(sp)
-    lw s2, DRAW_STRING_S2(sp)
-    lw s1, DRAW_STRING_S1(sp)
-    lw s0, DRAW_STRING_S0(sp)
-    lw ra, DRAW_STRING_RA(sp)
+    lw ra, 28(sp)
+    lw s0, 24(sp)
+    lw s1, 20(sp)
+    lw s2, 16(sp)
+    lw s3, 12(sp)
+    lw s4, 8(sp)
+    lw s5, 4(sp)
     addi sp, sp, 32
     ret
 
@@ -242,24 +233,15 @@ draw_string:
 #   t1 = scratch
 draw_rainbow_char:
     addi sp, sp, -48
-    .equ RAINBOW_CHAR_RA, 44
-    .equ RAINBOW_CHAR_S0, 40
-    .equ RAINBOW_CHAR_S1, 36
-    .equ RAINBOW_CHAR_S2, 32
-    .equ RAINBOW_CHAR_S3, 28
-    .equ RAINBOW_CHAR_S4, 24
-    .equ RAINBOW_CHAR_S5, 20
-    .equ RAINBOW_CHAR_S6, 16
-    .equ RAINBOW_CHAR_S7, 12
-    sw ra, RAINBOW_CHAR_RA(sp)
-    sw s0, RAINBOW_CHAR_S0(sp)
-    sw s1, RAINBOW_CHAR_S1(sp)
-    sw s2, RAINBOW_CHAR_S2(sp)
-    sw s3, RAINBOW_CHAR_S3(sp)
-    sw s4, RAINBOW_CHAR_S4(sp)
-    sw s5, RAINBOW_CHAR_S5(sp)
-    sw s6, RAINBOW_CHAR_S6(sp)
-    sw s7, RAINBOW_CHAR_S7(sp)
+    sw ra, 44(sp)
+    sw s0, 40(sp)
+    sw s1, 36(sp)
+    sw s2, 32(sp)
+    sw s3, 28(sp)
+    sw s4, 24(sp)
+    sw s5, 20(sp)
+    sw s6, 16(sp)
+    sw s7, 12(sp)
 
     mv s0, a0
     mv s1, a1
@@ -313,15 +295,15 @@ draw_rainbow_char:
 
 .Lrainbow_char_done:
     mv a0, s2
-    lw s7, RAINBOW_CHAR_S7(sp)
-    lw s6, RAINBOW_CHAR_S6(sp)
-    lw s5, RAINBOW_CHAR_S5(sp)
-    lw s4, RAINBOW_CHAR_S4(sp)
-    lw s3, RAINBOW_CHAR_S3(sp)
-    lw s2, RAINBOW_CHAR_S2(sp)
-    lw s1, RAINBOW_CHAR_S1(sp)
-    lw s0, RAINBOW_CHAR_S0(sp)
-    lw ra, RAINBOW_CHAR_RA(sp)
+    lw ra, 44(sp)
+    lw s0, 40(sp)
+    lw s1, 36(sp)
+    lw s2, 32(sp)
+    lw s3, 28(sp)
+    lw s4, 24(sp)
+    lw s5, 20(sp)
+    lw s6, 16(sp)
+    lw s7, 12(sp)
     addi sp, sp, 48
     ret
 
@@ -339,24 +321,15 @@ draw_rainbow_char:
 #   t1 = scratch
 draw_char:
     addi sp, sp, -48
-    .equ DRAW_CHAR_RA, 44
-    .equ DRAW_CHAR_S0, 40
-    .equ DRAW_CHAR_S1, 36
-    .equ DRAW_CHAR_S2, 32
-    .equ DRAW_CHAR_S3, 28
-    .equ DRAW_CHAR_S4, 24
-    .equ DRAW_CHAR_S5, 20
-    .equ DRAW_CHAR_S6, 16
-    .equ DRAW_CHAR_S7, 12
-    sw ra, DRAW_CHAR_RA(sp)
-    sw s0, DRAW_CHAR_S0(sp)
-    sw s1, DRAW_CHAR_S1(sp)
-    sw s2, DRAW_CHAR_S2(sp)
-    sw s3, DRAW_CHAR_S3(sp)
-    sw s4, DRAW_CHAR_S4(sp)
-    sw s5, DRAW_CHAR_S5(sp)
-    sw s6, DRAW_CHAR_S6(sp)
-    sw s7, DRAW_CHAR_S7(sp)
+    sw ra, 44(sp)
+    sw s0, 40(sp)
+    sw s1, 36(sp)
+    sw s2, 32(sp)
+    sw s3, 28(sp)
+    sw s4, 24(sp)
+    sw s5, 20(sp)
+    sw s6, 16(sp)
+    sw s7, 12(sp)
 
     mv s0, a0
     mv s1, a1
@@ -404,15 +377,15 @@ draw_char:
     j .Ldraw_char_col_loop
 
 .Ldraw_char_done:
-    lw s7, DRAW_CHAR_S7(sp)
-    lw s6, DRAW_CHAR_S6(sp)
-    lw s5, DRAW_CHAR_S5(sp)
-    lw s4, DRAW_CHAR_S4(sp)
-    lw s3, DRAW_CHAR_S3(sp)
-    lw s2, DRAW_CHAR_S2(sp)
-    lw s1, DRAW_CHAR_S1(sp)
-    lw s0, DRAW_CHAR_S0(sp)
-    lw ra, DRAW_CHAR_RA(sp)
+    lw ra, 44(sp)
+    lw s0, 40(sp)
+    lw s1, 36(sp)
+    lw s2, 32(sp)
+    lw s3, 28(sp)
+    lw s4, 24(sp)
+    lw s5, 20(sp)
+    lw s6, 16(sp)
+    lw s7, 12(sp)
     addi sp, sp, 48
     ret
 

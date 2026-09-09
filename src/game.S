@@ -63,32 +63,19 @@ game_update:
 #   t0-t6/a0-a1 = short-lived scratch and call arguments.
 render_frame:
         addi sp, sp, -64
-        .equ RENDER_FRAME_RA, 60
-        .equ RENDER_FRAME_S0, 56
-        .equ RENDER_FRAME_S1, 52
-        .equ RENDER_FRAME_S2, 48
-        .equ RENDER_FRAME_S3, 44
-        .equ RENDER_FRAME_S4, 40
-        .equ RENDER_FRAME_S5, 36
-        .equ RENDER_FRAME_S6, 32
-        .equ RENDER_FRAME_S7, 28
-        .equ RENDER_FRAME_S8, 24
-        .equ RENDER_FRAME_S9, 20
-        .equ RENDER_FRAME_S10, 16
-        .equ RENDER_FRAME_S11, 12
-        sw ra, RENDER_FRAME_RA(sp)
-        sw s0, RENDER_FRAME_S0(sp)
-        sw s1, RENDER_FRAME_S1(sp)
-        sw s2, RENDER_FRAME_S2(sp)
-        sw s3, RENDER_FRAME_S3(sp)
-        sw s4, RENDER_FRAME_S4(sp)
-        sw s5, RENDER_FRAME_S5(sp)
-        sw s6, RENDER_FRAME_S6(sp)
-        sw s7, RENDER_FRAME_S7(sp)
-        sw s8, RENDER_FRAME_S8(sp)
-        sw s9, RENDER_FRAME_S9(sp)
-        sw s10, RENDER_FRAME_S10(sp)
-        sw s11, RENDER_FRAME_S11(sp)
+        sw ra, 60(sp)
+        sw s0, 56(sp)
+        sw s1, 52(sp)
+        sw s2, 48(sp)
+        sw s3, 44(sp)
+        sw s4, 40(sp)
+        sw s5, 36(sp)
+        sw s6, 32(sp)
+        sw s7, 28(sp)
+        sw s8, 24(sp)
+        sw s9, 20(sp)
+        sw s10,16(sp)
+        sw s11, 12(sp)
 
         li s0, 0
 
@@ -175,19 +162,19 @@ render_frame:
         li t0, SCREEN_WIDTH
         blt s0, t0, .Lrender_column_loop
 
-        lw s11, RENDER_FRAME_S11(sp)
-        lw s10, RENDER_FRAME_S10(sp)
-        lw s9, RENDER_FRAME_S9(sp)
-        lw s8, RENDER_FRAME_S8(sp)
-        lw s7, RENDER_FRAME_S7(sp)
-        lw s6, RENDER_FRAME_S6(sp)
-        lw s5, RENDER_FRAME_S5(sp)
-        lw s4, RENDER_FRAME_S4(sp)
-        lw s3, RENDER_FRAME_S3(sp)
-        lw s2, RENDER_FRAME_S2(sp)
-        lw s1, RENDER_FRAME_S1(sp)
-        lw s0, RENDER_FRAME_S0(sp)
-        lw ra, RENDER_FRAME_RA(sp)
+        lw ra, 60(sp)
+        lw s0, 56(sp)
+        lw s1, 52(sp)
+        lw s2, 48(sp)
+        lw s3, 44(sp)
+        lw s4, 40(sp)
+        lw s5, 36(sp)
+        lw s6, 32(sp)
+        lw s7, 28(sp)
+        lw s8, 24(sp)
+        lw s9, 20(sp)
+        lw s10,16(sp)
+        lw s11, 12(sp)
         addi sp, sp, 64
         ret
 
@@ -195,14 +182,13 @@ render_frame:
 # Start a new frame timer
 set_frame_start:
         addi sp, sp, -16
-        .equ SET_FRAME_START_RA, 12
-        sw ra, SET_FRAME_START_RA(sp)
+        sw ra, 12(sp)
 
         call timer0_read_us
 
         SAVE_WORD a0 frame_start_us t0
 
-        lw ra, SET_FRAME_START_RA(sp)
+        lw ra, 12(sp)
         addi sp, sp, 16
         ret
 
