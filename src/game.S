@@ -12,7 +12,9 @@
 .equ MAP_WIDTH, 32
 .equ MAP_HEIGHT, 32
 .equ SCREEN_WIDTH, 320
-.equ SCREEN_HEIGHT, 200
+.equ SCREEN_HEIGHT, 240
+.equ FLOOR_COLOR, 0xd618
+.equ ROOF_COLOR, 0x5a08
 
 # ***************************************************
 # This starts the main gameloop performing the following steps
@@ -22,6 +24,8 @@
 #   * wait till the frame's deadline is reached for constane fps
 gameloop:
         LOG_STRING enter_gameloop_msg
+        li a0, 0xff00
+        call lcd_clear
 
 .Lnext_frame:
         call set_frame_start
@@ -43,6 +47,20 @@ game_update:
         addi sp, sp, -16
         sw ra, 12(sp)
 
+        LOAD_WORD a0 rot_speed
+        LOAD_WORD a1 player_dir_x
+        LOAD_WORD a2 player_dir_y
+        call rotate_vec              # a0=x', a1=y'
+        SAVE_WORD a0 player_dir_x t0
+        SAVE_WORD a1 player_dir_y t0
+
+        LOAD_WORD a0 rot_speed
+        LOAD_WORD a1 plane_x
+        LOAD_WORD a2 plane_y
+        call rotate_vec              # a0=x', a1=y'
+        SAVE_WORD a0 plane_x t0
+        SAVE_WORD a1 plane_y t0
+
         lw ra, 12(sp)
         addi sp, sp, 16
         ret
@@ -50,7 +68,7 @@ game_update:
 # Register map:
 #   s0  = screen column x (integer)
 #   s1  = side_dist_y (Q16.16)
-#   s2  = camera_x (Q16.16)
+#   s2  = camera_x (Q16.16), then rendered column pixel count
 #   s3  = ray_dir_x (Q16.16)
 #   s4  = ray_dir_y (Q16.16)
 #   s5  = map_x (integer)
@@ -79,6 +97,21 @@ render_frame:
 
         li s0, 0
 
+        # draw roof and floor
+        li a0, 0
+        li a1, 0
+        li a2, SCREEN_WIDTH
+        li a3, SCREEN_HEIGHT / 2
+        li a4, ROOF_COLOR
+        call fill_rect
+
+        li a0, 0
+        li a1, SCREEN_HEIGHT / 2
+        li a2, SCREEN_WIDTH
+        li a3, SCREEN_HEIGHT / 2
+        li a4, FLOOR_COLOR
+        call fill_rect
+
 .Lrender_column_loop:
         # camera_x = 2 * x / (SCREEN_WIDTH - 1) - 1.0
         slli s2, s0, 1
@@ -104,23 +137,37 @@ render_frame:
         LOAD_WORD t0, player_pos_y
         FP_TO_INT s6, t0
 
-        bnez s3, .Lray_dir_x_nonzero
-        li s3, FP_EPSILON
-.Lray_dir_x_nonzero:
+        mv a0, s3
+        FP_ABS a0
+        li t0, 2
+        bgeu t0, a0, .Lray_dir_x_near_zero
+
         li a0, FP_ONE
         mv a1, s3
         call fp_div
         FP_ABS a0
         mv s7, a0
+        j .Lhave_delta_dist_x
 
-        bnez s4, .Lray_dir_y_nonzero
-        li s4, FP_EPSILON
-.Lray_dir_y_nonzero:
+.Lray_dir_x_near_zero:
+        li s7, 0x7fffffff
+.Lhave_delta_dist_x:
+
+        mv a0, s4
+        FP_ABS a0
+        li t0, 2
+        bgeu t0, a0, .Lray_dir_y_near_zero
+
         li a0, FP_ONE
         mv a1, s4
         call fp_div
         FP_ABS a0
         mv s8, a0
+        j .Lhave_delta_dist_y
+
+.Lray_dir_y_near_zero:
+        li s8, 0x7fffffff
+.Lhave_delta_dist_y:
 
         LOAD_WORD t0, player_pos_x
         bgez s3, .Lray_dir_x_positive
@@ -159,44 +206,94 @@ render_frame:
         # DDA and wall projection will consume the s-register state above.
 
         # a0: hit side
-
 .Ldda_loop:
-        bge s11, s7, .Lx_gt_y
+        bge s11, s1, .Lstep_y
 
         add s11, s11, s7
         add s5, s5, s9
         li a0, 0
+        j .Lcheck_wall
 
-.Lx_gt_y:
+.Lstep_y:
         add s1, s1, s8
         add s6, s6, s10
         li a0, 1
 
+.Lcheck_wall:
         # check ray wall hit
         li t0, MAP_WIDTH
-        mul t0, s6, t0            # y * width
-        add t0, t0, s5            # + x
+        bgeu s5, t0, .Lwall_hit
+        li t1, MAP_HEIGHT
+        bgeu s6, t1, .Lwall_hit
+
+        mul t0, s6, t0              # y * width
+        add t0, t0, s5              # + x
 
         la t1, level1
-        lb t0, 0(t1)              # map entry
+        add t1, t1, t0              # advance to calculated map pos
+        lb t0, 0(t1)                # map entry
         beqz t0, .Ldda_loop
 
+.Lwall_hit:
         # ****************************************
         # distance projected on camera direction
-        li a1, FP_ZERO             # perpWallDist
+        li t0, FP_ZERO             # perpWallDist
         beqz a0, .Lwall_x
 
-        sub a1, s1, s8
+        sub t0, s1, s8
+        j .Lhave_wall_distance
 .Lwall_x:
-        sub a1, s11, s8
+        sub t0, s11, s7
+.Lhave_wall_distance:
 
+        mv s3, a0                   # store wall hit side
 
         # ****************************************
         #  height of line
+        li t1, 512                  # 1/128 in Q16.16
+        ble t0, t1, .Lfull_height_column
 
+        li a0, SCREEN_HEIGHT
+        slli a0, a0, FP_SHIFT
+        mv a1, t0
+        call fp_div
+        FP_TO_INT t3, a0             # projected line height
 
-        # TODO
+        li t2, SCREEN_HEIGHT / 2
+        srli t3, t3, 1               # projected half-height
+        sub t4, t2, t3
+        max t4, t4, zero             # line start >= 0
 
+        add t5, t2, t3
+        addi t6, zero, SCREEN_HEIGHT - 1
+        min t5, t5, t6               # line end < screen height
+
+        sub s2, t5, t4
+        addi s2, s2, 1               # inclusive window pixel count
+        j .Ldraw_wall_column
+
+.Lfull_height_column:
+        li t4, 0
+        li t5, SCREEN_HEIGHT - 1
+        li s2, SCREEN_HEIGHT
+
+        # ****************************************
+        # Draw column line
+.Ldraw_wall_column:
+        mv a0, s0                   # x0
+        mv a1, s0                   # x1: one display column
+        mv a2, t4                   # y0
+        mv a3, t5                   # y1
+        call set_window
+
+        # different shade depending on side
+        li a0, 0xe004
+        # different shade depending on side
+        srl a0, a0, s3
+        mv a1, s2
+        call write_color
+
+        # next x pos
         addi s0, s0, 1
         li t0, SCREEN_WIDTH
         blt s0, t0, .Lrender_column_loop
@@ -248,10 +345,10 @@ wait_frame_time:
         sub s2, a0, s0                     # us already spent
         ble s2, s1, .Lwait_next
 
-        LOG_STRING framerate_delay_msg
-        mv a0, s2
-        call itoa
-        LOG_STRING_PTR a0
+        # LOG_STRING framerate_delay_msg
+        # mv a0, s2
+        # call itoa
+        # LOG_STRING_PTR a0
 
 .Lwait_next:
         call timer0_read_us
@@ -268,6 +365,10 @@ wait_frame_time:
         ret
 
 
+# ***************************************************
+
+
+
 
 # ***************************************************
 .section .bss
@@ -278,11 +379,13 @@ frame_start_us: .space 4
 .section .data
 .align 2
 player_pos_x: .word 22 * FP_ONE
-player_pos_y: .word 12 * FP_ONE
+player_pos_y: .word 6 * FP_ONE
 player_dir_x: .word -FP_ONE
 player_dir_y: .word 0
 plane_x:      .word 0
 plane_y:      .word (66 * FP_ONE + 50) / 100
+rot_speed:    .word 50 * FP_ONE / 10000
+move_speed:   .word (50 * FP_ONE + 50) / 100
 
 # ***************************************************
 .section .rodata
@@ -295,34 +398,34 @@ framerate_delay_msg:
 
 level1:
         .byte 1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1
-        .byte 1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1
-        .byte 1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1
-        .byte 1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1
-        .byte 1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1
-        .byte 1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1
-        .byte 1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1
-        .byte 1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1
-        .byte 1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1
-        .byte 1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1
-        .byte 1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1
+        .byte 1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,1
+        .byte 1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,1
+        .byte 1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,1
+        .byte 1,0,0,0,1,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1
+        .byte 1,0,0,0,1,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1
+        .byte 1,0,0,0,1,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1
+        .byte 1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,1,1,0,0,0,1
+        .byte 1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,1,1,0,0,0,1
+        .byte 1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,1,1,0,0,0,1
+        .byte 1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,1
         .byte 1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1
         .byte 1,0,0,0,0,0,0,1,1,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1
         .byte 1,0,0,0,0,0,0,1,1,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1
         .byte 1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,1,0,0,0,0,0,1
-        .byte 1,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,1,0,0,0,0,0,1
+        .byte 1,0,0,0,1,0,0,0,0,0,1,1,1,1,1,1,1,1,1,0,0,0,0,0,1,1,0,0,0,0,0,1
         .byte 1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1
         .byte 1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1
-        .byte 1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1
-        .byte 1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1
-        .byte 1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1
-        .byte 1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1
-        .byte 1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1
-        .byte 1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1
-        .byte 1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1
-        .byte 1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1
-        .byte 1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1
-        .byte 1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1
-        .byte 1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1
+        .byte 1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1
+        .byte 1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1
+        .byte 1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1
+        .byte 1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1
+        .byte 1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1
+        .byte 1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1
+        .byte 1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1
+        .byte 1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1
+        .byte 1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1
+        .byte 1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1
+        .byte 1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1
         .byte 1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1
         .byte 1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1
         .byte 1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1

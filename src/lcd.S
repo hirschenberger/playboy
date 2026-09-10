@@ -341,31 +341,27 @@ lcd_data_byte:
 
 # a0=command, a1=data address, a2=data byte count.
 lcd_command_data:
-        addi sp, sp, -16
-    .equ LCD_COMMAND_DATA_RA, 12
-    .equ LCD_COMMAND_DATA_ADDRESS, 8
-    .equ LCD_COMMAND_DATA_COUNT, 4
-        sw ra, LCD_COMMAND_DATA_RA(sp)
-        sw a1, LCD_COMMAND_DATA_ADDRESS(sp)
-        sw a2, LCD_COMMAND_DATA_COUNT(sp)
+        addi sp, sp, -32
+        sw ra, 28(sp)
+        sw s0, 24(sp)
+        sw s1, 20(sp)
+
+        mv s0, a1
+        mv s1, a2
 
         call lcd_command
 0:
-        lw t0, LCD_COMMAND_DATA_COUNT(sp)
-        beqz t0, 1f
-        lw t1, LCD_COMMAND_DATA_ADDRESS(sp)
-        lbu a0, 0(t1)
+        beqz s1, 1f
+        lbu a0, 0(s0)
         call lcd_data_byte
-        lw t1, LCD_COMMAND_DATA_ADDRESS(sp)
-        addi t1, t1, 1
-        sw t1, LCD_COMMAND_DATA_ADDRESS(sp)
-        lw t0, LCD_COMMAND_DATA_COUNT(sp)
-        addi t0, t0, -1
-        sw t0, LCD_COMMAND_DATA_COUNT(sp)
+        addi s0, s0, 1
+        addi s1, s1, -1
         j 0b
 1:
-        lw ra, LCD_COMMAND_DATA_RA(sp)
-        addi sp, sp, 16
+        lw s1, 20(sp)
+        lw s0, 24(sp)
+        lw ra, 28(sp)
+        addi sp, sp, 32
         ret
 
 lcd_write_byte:

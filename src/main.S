@@ -14,11 +14,8 @@ main:
     li a0, 0xffbb                 # RGB565 dark grey
     call lcd_clear
 
-    li a0, 2000
-    call draw_title
-
-    li a0, 0xffff                 # RGB565 dark grey
-    call lcd_clear
+    # li a0, 2000
+    # call draw_title
 
     call gameloop
 

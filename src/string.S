@@ -7,7 +7,7 @@
 
 .equ ITOA_BUFFER_SIZE, 12
 
-# Convert unsigned integer to null-terminated ascii string
+# Convert integer to null-terminated ascii string
 #
 # In:
 #   a0: the integer to convert
@@ -17,21 +17,33 @@ itoa:
     la t0, itoa_buffer                   # buffer ptr
     addi t0, t0, ITOA_BUFFER_SIZE-1      # move to end of buffer
     li t1, 10                            # divider
+    mv t2, a0                            # abs(a0)
+    bgez t2, .Lnon_neg
 
+    neg t2, t2
+
+.Lnon_neg:
     # add terminator
     sb zero, 0(t0)
     addi t0, t0, -1
 
 .Lnext_char:
-    remu t3, a0, t1
-    divu a0, a0, t1
+    remu t3, t2, t1
+    divu t2, t2, t1
 
     add t3, t3, '0'                       # to ascii
     sb t3, 0(t0)                          # store char
-    beqz a0, .Lfini
+    beqz t2, .Lcheck_sign
 
     addi t0, t0, -1
     j .Lnext_char
+
+.Lcheck_sign:
+    bgez a0, .Lfini
+
+    addi t0, t0, -1
+    li t1, '-'
+    sb t1, 0(t0)
 
 .Lfini:
     mv a0, t0
@@ -39,4 +51,5 @@ itoa:
 
 
 .section .bss
+.align 1
 itoa_buffer: .space ITOA_BUFFER_SIZE
