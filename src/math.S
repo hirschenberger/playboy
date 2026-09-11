@@ -49,16 +49,16 @@
 # Out:
 #   * a0: Q16.16 product
 fp_mul:
-    mul     t0, a0, a1       # low 32 bits
-    mulh    t1, a0, a1       # high 32 bits, signed
+        mul     t0, a0, a1       # low 32 bits
+        mulh    t1, a0, a1       # high 32 bits, signed
 
-    # Arithmetic 64-bit >> 16
-    slli    t1, t1, 16
-    srai    t0, t0, 16
+        # Arithmetic 64-bit >> 16
+        slli    t1, t1, 16
+        srai    t0, t0, 16
 
-    or      a0, t0, t1
+        or      a0, t0, t1
 
-    ret
+        ret
 
 # ------------------------------------------------------------------------------
 # fp_div: Q16.16 / Q16.16 -> Q16.16.
@@ -74,78 +74,78 @@ fp_mul:
 # Out:
 #   * a0: Q16.16 quotient
 fp_div:
-    # Save result sign; t2 = 1 if signs differ.
-    xor     t2, a0, a1
-    srli    t2, t2, 31
+        # Save result sign; t2 = 1 if signs differ.
+        xor     t2, a0, a1
+        srli    t2, t2, 31
 
-    # Absolute numerator.
-    mv      t0, a0
-    bgez    t0, 1f
-    neg     t0, t0
+        # Absolute numerator.
+        mv      t0, a0
+        bgez    t0, 1f
+        neg     t0, t0
 
 1:
-    # Absolute denominator.
-    mv      t1, a1
-    bgez    t1, 2f
-    neg     t1, t1
+        # Absolute denominator.
+        mv      t1, a1
+        bgez    t1, 2f
+        neg     t1, t1
 
 2:
-    # Compute (t0 << 16) / t1. Since t0 is 32-bit, the numerator can be
-    # 48-bit; use restoring division bit-by-bit.
-    # t3 = quotient
-    # t4 = remainder
-    # t5 = bit counter
+        # Compute (t0 << 16) / t1. Since t0 is 32-bit, the numerator can be
+        # 48-bit; use restoring division bit-by-bit.
+        # t3 = quotient
+        # t4 = remainder
+        # t5 = bit counter
 
-    li      t3, 0
-    li      t4, 0
-    li      t5, 47
+        li      t3, 0
+        li      t4, 0
+        li      t5, 47
 
 3:
-    # Get next numerator bit. The first 32 bits come from t0; the last 16
-    # are zero because of the << 16.
+        # Get next numerator bit. The first 32 bits come from t0; the last 16
+        # are zero because of the << 16.
 
-    li      t6, 16
-    blt     t5, t6, 4f
+        li      t6, 16
+        blt     t5, t6, 4f
 
-    addi    t6, t5, -16
-    srl     t6, t0, t6
-    andi    t6, t6, 1
-    j       5f
+        addi    t6, t5, -16
+        srl     t6, t0, t6
+        andi    t6, t6, 1
+        j       5f
 
 4:
-    li      t6, 0
+        li      t6, 0
 
 5:
-    # remainder = (remainder << 1) | bit
-    slli    t4, t4, 1
-    or      t4, t4, t6
+        # remainder = (remainder << 1) | bit
+        slli    t4, t4, 1
+        or      t4, t4, t6
 
-    # When remainder >= divisor:
-    #     remainder -= divisor
-    #     quotient bit = 1
-    bltu    t4, t1, 6f
+        # When remainder >= divisor:
+        #     remainder -= divisor
+        #     quotient bit = 1
+        bltu    t4, t1, 6f
 
-    sub     t4, t4, t1
+        sub     t4, t4, t1
 
-    slli    t3, t3, 1
-    ori     t3, t3, 1
-    j       7f
+        slli    t3, t3, 1
+        ori     t3, t3, 1
+        j       7f
 
 6:
-    slli    t3, t3, 1
+        slli    t3, t3, 1
 
 7:
-    addi    t5, t5, -1
-    bgez    t5, 3b
+        addi    t5, t5, -1
+        bgez    t5, 3b
 
-    # Apply sign.
-    mv      a0, t3
+        # Apply sign.
+        mv      a0, t3
 
-    beqz    t2, 8f
-    neg     a0, a0
+        beqz    t2, 8f
+        neg     a0, a0
 
 8:
-    ret
+        ret
 
 # ------------------------------------------------------------------------------
 # fp_clamp: clamp a0 between a1 and a2.
@@ -159,21 +159,21 @@ fp_div:
 #   * a0: clamped value
 
 fp_clamp:
-    blt     a0, a1, 1f
-    bgt     a0, a2, 2f
-    ret
+        blt     a0, a1, 1f
+        bgt     a0, a2, 2f
+        ret
 
 1:
-    mv      a0, a1
-    ret
+        mv      a0, a1
+        ret
 
 2:
-    mv      a0, a2
-    ret
+        mv      a0, a2
+        ret
 
-    .section .text
-    .align 2
-    .type sin_cos, @function
+        .section .text
+        .align 2
+        .type sin_cos, @function
 
 # ------------------------------------------------------------------------------
 # Rotate a vector by a turn angle.
@@ -240,100 +240,100 @@ rotate_vec:
 # LUT: 65 Q16.16 entries covering 0 degrees .. 90 degrees.
 
 sin_cos:
-    # Keep only the 16-bit angle
-    slli    a0, a0, 16
-    srli    a0, a0, 16
+        # Keep only the 16-bit angle
+        slli    a0, a0, 16
+        srli    a0, a0, 16
 
-    # q = angle >> 14
-    srli    t0, a0, 14
+        # q = angle >> 14
+        srli    t0, a0, 14
 
-    # idx = (angle >> 8) & 0x3f
-    srli    t1, a0, 8
-    andi    t1, t1, 0x3f
-    mv      t6, t1
+        # idx = (angle >> 8) & 0x3f
+        srli    t1, a0, 8
+        andi    t1, t1, 0x3f
+        mv      t6, t1
 
-    # --------------------------------------------------------
-    # Calculate sine index
-    # --------------------------------------------------------
+        # --------------------------------------------------------
+        # Calculate sine index
+        # --------------------------------------------------------
 
-    # reflected = 64 - idx
-    li      t2, 64
-    sub     t2, t2, t1
+        # reflected = 64 - idx
+        li      t2, 64
+        sub     t2, t2, t1
 
-    # q 0 or 2 -> idx
-    # q 1 or 3 -> 64 - idx
+        # q 0 or 2 -> idx
+        # q 1 or 3 -> 64 - idx
 
-    andi    t3, t0, 1
-    beqz    t3, .L_sin_index_ready
+        andi    t3, t0, 1
+        beqz    t3, .L_sin_index_ready
 
-    mv      t1, t2
+        mv      t1, t2
 
 .L_sin_index_ready:
 
-    # Load sine LUT value
-    slli    t3, t1, 2
-    la      t4, sin_lut
-    add     t4, t4, t3
-    lw      t5, 0(t4)
+        # Load sine LUT value
+        slli    t3, t1, 2
+        la      t4, sin_lut
+        add     t4, t4, t3
+        lw      t5, 0(t4)
 
-    # q >= 2 -> sine negative
-    srli    t3, t0, 1
-    beqz    t3, .L_sin_positive
+        # q >= 2 -> sine negative
+        srli    t3, t0, 1
+        beqz    t3, .L_sin_positive
 
-    neg     t5, t5
+        neg     t5, t5
 
 .L_sin_positive:
-    mv      a0, t5
+        mv      a0, t5
 
 
-    # --------------------------------------------------------
-    # Calculate cosine
-    # --------------------------------------------------------
+        # --------------------------------------------------------
+        # Calculate cosine
+        # --------------------------------------------------------
 
-    # For cosine:
-    #
-    # q 0 -> 64 - idx
-    # q 1 -> idx
-    # q 2 -> 64 - idx
-    # q 3 -> idx
-    #
-    # Therefore:
-    #   cosine uses idx when q is odd
-    #   cosine uses 64-idx when q is even
+        # For cosine:
+        #
+        # q 0 -> 64 - idx
+        # q 1 -> idx
+        # q 2 -> 64 - idx
+        # q 3 -> idx
+        #
+        # Therefore:
+        #   cosine uses idx when q is odd
+        #   cosine uses 64-idx when q is even
 
-    andi    t3, t0, 1
-    beqz    t3, .L_cos_reflect
+        andi    t3, t0, 1
+        beqz    t3, .L_cos_reflect
 
-    # odd quadrant -> idx
-    mv      t1, t6
-    j       .L_cos_load
+        # odd quadrant -> idx
+        mv      t1, t6
+        j       .L_cos_load
 
 .L_cos_reflect:
 
-    # even quadrant -> 64 - original idx
-    li      t2, 64
-    sub     t1, t2, t6
+        # even quadrant -> 64 - original idx
+        li      t2, 64
+        sub     t1, t2, t6
 
 .L_cos_load:
 
-    slli    t3, t1, 2
-    la      t4, sin_lut
-    add     t4, t4, t3
-    lw      t5, 0(t4)
+        slli    t3, t1, 2
+        la      t4, sin_lut
+        add     t4, t4, t3
+        lw      t5, 0(t4)
 
-    li      t6, 1
-    beq     t0, t6, .L_cos_negative
+        li      t6, 1
+        beq     t0, t6, .L_cos_negative
 
-    li      t6, 2
-    beq     t0, t6, .L_cos_negative
+        li      t6, 2
+        beq     t0, t6, .L_cos_negative
 
-    mv      a1, t5
-    ret
+        mv      a1, t5
+        ret
 
 .L_cos_negative:
-    neg     t5, t5
-    mv      a1, t5
-    ret
+        neg     t5, t5
+        mv      a1, t5
+        ret
 
 # ------------------------------------------------------------------------------
 .section .rodata

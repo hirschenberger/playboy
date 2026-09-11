@@ -8,32 +8,32 @@
 .type main, @function
 
 main:
-    call lcd_init
+        call lcd_init
 
-    LOG_STRING console_boot_message
+        LOG_STRING console_boot_message
 
-    li a0, 0xffbb                 # RGB565 dark grey
-    call lcd_clear
+        li a0, 0xffbb                 # RGB565 dark grey
+        call lcd_clear
 
-    # li a0, 2000
-    # call draw_title
+        # li a0, 2000
+        # call draw_title
 
-    call gameloop
+        call gameloop
 
-    LOG_STRING exit_game
+        LOG_STRING exit_game
 
-    wfi
+        wfi
 
 
 
 
 .section .rodata
 console_boot_message:
-    .ascii  "    **************************************\n"
-    .ascii  "    * Pico 2 RISC-V LCD firmware started *\n"
-    .asciz  "    **************************************"
+        .ascii  "    **************************************\n"
+        .ascii  "    * Pico 2 RISC-V LCD firmware started *\n"
+        .asciz  "    **************************************"
 
 exit_game:
-    .ascii  "    **************************************\n"
-    .ascii  "    *      Emergency exit firmware       *\n"
-    .asciz  "    **************************************"
+        .ascii  "    **************************************\n"
+        .ascii  "    *      Emergency exit firmware       *\n"
+        .asciz  "    **************************************"
