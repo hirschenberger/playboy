@@ -4,6 +4,9 @@
 .extern uart_init
 .extern timer0_init
 
+# ------------------------------------------------------------------------------
+# Initialize the clock tree, TIMER0, UART0, LCD GPIO, SPI1, and the
+# ST7789VW panel, in that order.
 lcd_init:
         addi sp, sp, -16
         sw ra, 12(sp)
@@ -19,7 +22,15 @@ lcd_init:
         addi sp, sp, 16
         ret
 
-# a0=x0, a1=x1, a2=y0, a3=y1. Leave LCD selected and in data mode for RAMWR.
+# ------------------------------------------------------------------------------
+# Set the ST7789VW active window and enable RAMWR, leaving the LCD
+# selected and in data mode.
+#
+# In:
+#   * a0: x0
+#   * a1: x1
+#   * a2: y0
+#   * a3: y1
 set_window:
         addi sp, sp, -48
         sw ra, 44(sp)
@@ -72,7 +83,8 @@ set_window:
         ret
 
 
-# Configure control pins as SIO outputs and GP10--12 as SPI1.
+# ------------------------------------------------------------------------------
+# Configure the control pins as SIO outputs and GP10--12 as SPI1.
 lcd_gpio_init:
         li t0, PADS_BANK0_BASE
         li t1, PADS_OUTPUT_4MA
@@ -128,8 +140,9 @@ lcd_gpio_init:
         sw t1, SIO_GPIO_OUT_CLR(t0)
         ret
 
-# Configure the standard 150 MHz clock tree: 12 MHz XOSC feeds PLL_SYS at 1.5 GHz,
-# divided by 5 and 2 for CLK_SYS and CLK_PERI.
+# ------------------------------------------------------------------------------
+# Configure the standard 150 MHz clock tree: 12 MHz XOSC feeds PLL_SYS at
+# 1.5 GHz, divided by 5 and 2 for CLK_SYS and CLK_PERI.
 clocks_init:
         li t0, XOSC_BASE
         li t1, 3
@@ -205,7 +218,9 @@ clocks_init:
         beqz t1, 5b
         ret
 
-# CLK_PERI runs at 150 MHz; CPSR=4 produces a 37.5 MHz mode-0 SPI clock.
+# ------------------------------------------------------------------------------
+# Configure SPI1. CLK_PERI runs at 150 MHz; CPSR=4 produces a 37.5 MHz
+# mode-0 SPI clock.
 spi1_init:
         li t0, RESETS_BASE
         lw t1, RESETS_RESET(t0)
@@ -229,6 +244,8 @@ spi1_init:
         sw t1, SPI_CR1(t0)
         ret
 
+# ------------------------------------------------------------------------------
+# Run the vendor initialization sequence for the 320x240 ST7789VW panel.
 st7789_init:
         addi sp, sp, -16
     .equ ST7789_INIT_RA, 12
@@ -327,19 +344,35 @@ st7789_init:
         addi sp, sp, 16
         ret
 
+# ------------------------------------------------------------------------------
+# Send a command byte (D/C low) to the LCD.
+#
+# In:
+#   * a0: command byte
 lcd_command:
         li t0, SIO_BASE
         li t1, LCD_DC_MASK
         sw t1, SIO_GPIO_OUT_CLR(t0)
         j lcd_write_byte
 
+# ------------------------------------------------------------------------------
+# Send a data byte (D/C high) to the LCD.
+#
+# In:
+#   * a0: data byte
 lcd_data_byte:
         li t0, SIO_BASE
         li t1, LCD_DC_MASK
         sw t1, SIO_GPIO_OUT_SET(t0)
         j lcd_write_byte
 
-# a0=command, a1=data address, a2=data byte count.
+# ------------------------------------------------------------------------------
+# Send a command followed by its data bytes.
+#
+# In:
+#   * a0: command
+#   * a1: data address
+#   * a2: data byte count
 lcd_command_data:
         addi sp, sp, -32
         sw ra, 28(sp)
@@ -364,6 +397,11 @@ lcd_command_data:
         addi sp, sp, 32
         ret
 
+# ------------------------------------------------------------------------------
+# Write a byte to the LCD over SPI1, raising CS afterwards.
+#
+# In:
+#   * a0: byte to write
 lcd_write_byte:
         li t0, SIO_BASE
         li t1, LCD_CS_MASK

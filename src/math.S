@@ -5,54 +5,49 @@
 .section .text
 .align 2
 
-/* ============================================================
- * Q16.16 fixed-point math library
- *
- * Format:
- *
- *   31             16 15              0
- *   +----------------+----------------+
- *   | signed integer |   fraction     |
- *   +----------------+----------------+
- *
- *   value = raw / 65536
- *
- * Examples:
- *
- *   1.0  =  0x00010000
- *   0.5  =  0x00008000
- *  -1.0  =  0xFFFF0000
- *
- * Requires:
- *   RV32IM
- *
- * ABI:
- *   a0, a1 = arguments
- *   a0     = return value
- *
- * Clobbers:
- *   t0, t1
- * ============================================================ */
+# ------------------------------------------------------------------------------
+#  Q16.16 fixed-point math library
+#
+#  Format:
+#
+#    31             16 15              0
+#    +----------------+----------------+
+#    | signed integer |   fraction     |
+#    +----------------+----------------+
+#
+#    value = raw / 65536
+#
+#  Examples:
+#
+#    1.0  =  0x00010000
+#    0.5  =  0x00008000
+#   -1.0  =  0xFFFF0000
+#
+#  Requires:
+#    RV32IM
+#
+#  ABI:
+#    a0, a1 = arguments
+#    a0     = return value
+#
+#  Clobbers:
+#    t0, t1
+# ------------------------------------------------------------------------------
 
 
-/* ============================================================
- * fp_mul
- *
- * Q16.16 × Q16.16 -> Q16.16
- *
- * mathematically:
- *
- *   result = (a * b) >> 16
- *
- * We calculate the full 64-bit product:
- *
- *   t1:t0 = a0 * a1
- *
- * then shift it right by 16.
- *
- * This correctly preserves the upper bits of the product.
- *
- * ============================================================ */
+# ------------------------------------------------------------------------------
+# fp_mul: Q16.16 * Q16.16 -> Q16.16.
+#
+# Mathematically result = (a * b) >> 16. The full 64-bit product
+# (t1:t0 = a0 * a1) is computed and then shifted right by 16, which
+# correctly preserves the upper bits of the product.
+#
+# In:
+#   * a0: Q16.16 multiplicand
+#   * a1: Q16.16 multiplier
+#
+# Out:
+#   * a0: Q16.16 product
 fp_mul:
     mul     t0, a0, a1       # low 32 bits
     mulh    t1, a0, a1       # high 32 bits, signed
@@ -65,78 +60,49 @@ fp_mul:
 
     ret
 
-/* ============================================================
- * fp_div
- *
- * Q16.16 / Q16.16 -> Q16.16
- *
- * mathematically:
- *
- *   result = (a << 16) / b
- *
- * Problem:
- *
- *   RV32 div operates on 32-bit values, so we cannot simply
- *
- *       slli a0, a0, 16
- *       div  a0, a0, a1
- *
- * because the shifted numerator may overflow.
- *
- * We therefore use a 64-bit numerator and perform signed
- * division using unsigned division after handling the signs.
- *
- * ============================================================ */
+# ------------------------------------------------------------------------------
+# fp_div: Q16.16 / Q16.16 -> Q16.16.
+#
+# Mathematically result = (a << 16) / b. RV32 div only operates on 32-bit
+# values, so the shifted numerator may overflow; signed restoring division
+# is therefore done bit-by-bit.
+#
+# In:
+#   * a0: Q16.16 numerator
+#   * a1: Q16.16 denominator
+#
+# Out:
+#   * a0: Q16.16 quotient
 fp_div:
-    /*
-     * Save result sign.
-     *
-     * t2 = 1 if signs differ
-     */
+    # Save result sign; t2 = 1 if signs differ.
     xor     t2, a0, a1
     srli    t2, t2, 31
 
-    /*
-     * Absolute numerator
-     */
+    # Absolute numerator.
     mv      t0, a0
     bgez    t0, 1f
     neg     t0, t0
 
 1:
-    /*
-     * Absolute denominator
-     */
+    # Absolute denominator.
     mv      t1, a1
     bgez    t1, 2f
     neg     t1, t1
 
 2:
-    /*
-     * We need:
-     *
-     *   (t0 << 16) / t1
-     *
-     * Since t0 is 32-bit, the numerator can be 48-bit.
-     *
-     * Perform restoring division bit-by-bit.
-     *
-     * t3 = quotient
-     * t4 = remainder
-     * t5 = bit counter
-     */
+    # Compute (t0 << 16) / t1. Since t0 is 32-bit, the numerator can be
+    # 48-bit; use restoring division bit-by-bit.
+    # t3 = quotient
+    # t4 = remainder
+    # t5 = bit counter
 
     li      t3, 0
     li      t4, 0
     li      t5, 47
 
 3:
-    /*
-     * Get next numerator bit.
-     *
-     * First 32 bits come from t0.
-     * Last 16 bits are zero because of << 16.
-     */
+    # Get next numerator bit. The first 32 bits come from t0; the last 16
+    # are zero because of the << 16.
 
     li      t6, 16
     blt     t5, t6, 4f
@@ -150,18 +116,13 @@ fp_div:
     li      t6, 0
 
 5:
-    /*
-     * remainder = (remainder << 1) | bit
-     */
+    # remainder = (remainder << 1) | bit
     slli    t4, t4, 1
     or      t4, t4, t6
 
-    /*
-     * if remainder >= divisor:
-     *
-     *     remainder -= divisor
-     *     quotient bit = 1
-     */
+    # When remainder >= divisor:
+    #     remainder -= divisor
+    #     quotient bit = 1
     bltu    t4, t1, 6f
 
     sub     t4, t4, t1
@@ -177,9 +138,7 @@ fp_div:
     addi    t5, t5, -1
     bgez    t5, 3b
 
-    /*
-     * Apply sign.
-     */
+    # Apply sign.
     mv      a0, t3
 
     beqz    t2, 8f
@@ -188,18 +147,16 @@ fp_div:
 8:
     ret
 
-/* ============================================================
- * fp_clamp
- *
- * Clamp a0 between a1 and a2.
- *
- * a0 = value
- * a1 = minimum
- * a2 = maximum
- *
- * return:
- *   a0 = clamped value
- * ============================================================ */
+# ------------------------------------------------------------------------------
+# fp_clamp: clamp a0 between a1 and a2.
+#
+# In:
+#   * a0: value
+#   * a1: minimum
+#   * a2: maximum
+#
+# Out:
+#   * a0: clamped value
 
 fp_clamp:
     blt     a0, a1, 1f
@@ -218,10 +175,17 @@ fp_clamp:
     .align 2
     .type sin_cos, @function
 
-# a0: unsigned 16-bit turn angle
-# a1: X (Q16.16)
-# a2: Y (Q16.16)
-# Returns rotated X in a0 and rotated Y in a1.
+# ------------------------------------------------------------------------------
+# Rotate a vector by a turn angle.
+#
+# In:
+#   * a0: unsigned 16-bit turn angle
+#   * a1: X (Q16.16)
+#   * a2: Y (Q16.16)
+#
+# Out:
+#   * a0: rotated X
+#   * a1: rotated Y
 rotate_vec:
         addi sp, sp, -32
         sw ra, 28(sp)
@@ -254,30 +218,26 @@ rotate_vec:
         ret
 
 
-# ------------------------------------------------------------
-# sin_cos
+# ------------------------------------------------------------------------------
+# Compute sine and cosine of a turn angle.
 #
-# Input:
-#   a0 = unsigned 16-bit turn angle
+# In:
+#   * a0: unsigned 16-bit turn angle
 #
-# Output:
-#   a0 = sin(angle), Q16.16
-#   a1 = cos(angle), Q16.16
+# Out:
+#   * a0: sin(angle), Q16.16
+#   * a1: cos(angle), Q16.16
 #
-# Clobbers:
-#   t0-t6
+# Register map:
+#   * t0-t6: clobbered
 #
 # Angle representation:
-#   0x0000 =   0°
-#   0x4000 =  90°
-#   0x8000 = 180°
-#   0xC000 = 270°
+#   * 0x0000 =   0 degrees
+#   * 0x4000 =  90 degrees
+#   * 0x8000 = 180 degrees
+#   * 0xC000 = 270 degrees
 #
-# LUT:
-#   65 entries
-#   Q16.16
-#   0° .. 90°
-# ------------------------------------------------------------
+# LUT: 65 Q16.16 entries covering 0 degrees .. 90 degrees.
 
 sin_cos:
     # Keep only the 16-bit angle
@@ -375,7 +335,7 @@ sin_cos:
     mv      a1, t5
     ret
 
-# ************************************
+# ------------------------------------------------------------------------------
 .section .rodata
 .align 2
 

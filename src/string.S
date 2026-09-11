@@ -7,12 +7,14 @@
 
 .equ ITOA_BUFFER_SIZE, 12
 
-# Convert integer to null-terminated ascii string
+# ------------------------------------------------------------------------------
+# Convert an integer to a NUL-terminated ASCII string.
 #
 # In:
-#   a0: the integer to convert
+#   * a0: the integer to convert
+#
 # Out:
-#   a0: address of internal buffer with string
+#   * a0: address of the internal buffer containing the string
 itoa:
     la t0, itoa_buffer                   # buffer ptr
     addi t0, t0, ITOA_BUFFER_SIZE-1      # move to end of buffer

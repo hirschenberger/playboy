@@ -5,7 +5,8 @@
 .section .text
 .align 2
 
-# Configure TIMER0 to count the dedicated TIMER0 tick, with one tick per µs.
+# ------------------------------------------------------------------------------
+# Configure TIMER0 to count the dedicated TIMER0 tick, one tick per us.
 timer0_init:
     li t0, RESETS_BASE
     lw t1, RESETS_RESET(t0)
@@ -31,15 +32,24 @@ timer0_init:
     sw t1, TICKS_TIMER0_CTRL(t0)
     ret
 
-# Returns TIMER0 microseconds since timer0_init as a 64-bit value: a1:a0.
+# ------------------------------------------------------------------------------
+# Read the TIMER0 microseconds counter.
+#
+# Out:
+#   * a1:a0: microseconds since timer0_init (64-bit value)
 timer0_read_us:
     li t0, TIMER0_BASE
     lw a0, TIMER_TIMELR(t0)
     lw a1, TIMER_TIMEHR(t0)
     ret
 
-# a0=milliseconds. Uses the 1 tick / us TIMER0.
-# This can be used for delays < ~71min.
+# ------------------------------------------------------------------------------
+# Delay for a number of milliseconds using the 1 tick / us TIMER0.
+#
+# In:
+#   * a0: milliseconds
+#
+# Usable for delays shorter than roughly 71 minutes.
 delay_ms:
     li t0, 1000
     mul t1, a0, t0

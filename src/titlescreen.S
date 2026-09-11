@@ -2,7 +2,11 @@
 
 .section .text
 
-# a0: how many milliseconds to display
+# ------------------------------------------------------------------------------
+# Draw the title screen for a given display time.
+#
+# In:
+#   * a0: how many milliseconds to display
 draw_title:
         addi sp, sp, -32
         sw ra, 28(sp)

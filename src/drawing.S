@@ -5,7 +5,14 @@
 .global rainbow_colors_end, rainbow_colors, draw_buffer, write_buffer
 
 .section .text
-# a0=RGB565 color, a1=pixel count. set_window must already have selected LCD.
+# ------------------------------------------------------------------------------
+# Write a solid RGB565 color for a pixel count.
+#
+# In:
+#   * a0: RGB565 color
+#   * a1: pixel count
+#
+# set_window must already have selected the LCD.
 write_color:
     srli t2, a0, 8
     andi t3, a0, 0xff
@@ -51,9 +58,12 @@ write_color:
     sw t1, SIO_GPIO_OUT_SET(t0)
     ret
 
-# a0: buffer addr
-# Select the whole panel once, then stream the entire framebuffer in a
-# single RAMWR pass instead of issuing set_window/write_color per pixel.
+# ------------------------------------------------------------------------------
+# Stream the entire framebuffer to the panel in a single RAMWR pass
+# instead of issuing set_window/write_color per pixel.
+#
+# In:
+#   * a0: buffer address
 draw_buffer:
     addi sp, sp, -16
     sw ra, 12(sp)
@@ -75,10 +85,15 @@ draw_buffer:
     addi sp, sp, 16
     ret
 
-# a0: buffer addr. Writes all SCREEN_WIDTH*SCREEN_HEIGHT pixels (BUFFER_BYTES
-# bytes) row-major in one pass. set_window must already have selected LCD and
-# left CS low in data mode. Sends a byte at a time, batching into the 8-byte
-# FIFO to stay within the RP2350 SPI's TX/RX depth, then raises CS.
+# ------------------------------------------------------------------------------
+# Write all SCREEN_WIDTH*SCREEN_HEIGHT pixels (BUFFER_BYTES bytes) row-major
+# in one pass, byte at a time, batching into the 8-byte FIFO to stay within
+# the RP2350 SPI's TX/RX depth, then raises CS.
+#
+# In:
+#   * a0: buffer address
+#
+# set_window must already have selected the LCD and left CS low in data mode.
 write_buffer:
     li t0, SPI1_BASE
     li t2, BUFFER_BYTES      # bytes remaining
@@ -119,7 +134,11 @@ write_buffer:
     sw t1, SIO_GPIO_OUT_SET(t0)
     ret
 
-# a0=color. Clear all 320*240 pixels.
+# ------------------------------------------------------------------------------
+# Clear all 320*240 pixels.
+#
+# In:
+#   * a0: RGB565 fill color
 lcd_clear:
     addi sp, sp, -16
     sw ra, 12(sp)
@@ -142,7 +161,15 @@ lcd_clear:
     addi sp, sp, 16
     ret
 
-# a0=x, a1=y, a2=width, a3=height, a4=RGB565.
+# ------------------------------------------------------------------------------
+# Fill a rectangle.
+#
+# In:
+#   * a0: x
+#   * a1: y
+#   * a2: width
+#   * a3: height
+#   * a4: RGB565 color
 fill_rect:
     addi sp, sp, -32
     sw ra, 28(sp)
@@ -176,16 +203,27 @@ fill_rect:
     ret
 
 
-# a0=x, a1=y, a2=NUL-terminated ASCII, a3=colortable, a4=scale.
+# ------------------------------------------------------------------------------
+# Draw a string with per-column rainbow colors.
+#
+# In:
+#   * a0: x
+#   * a1: y
+#   * a2: NUL-terminated ASCII
+#   * a3: color table address
+#   * a4: scale
+#
+# Out:
+#   * a0: next color-table pointer
+#
 # Register map:
-#   s0 = current x
-#   s1 = y
-#   s2 = text pointer
-#   s3 = current color-table pointer
-#   s4 = scale
-#   s5 = glyph advance in pixels
-#   t0 = current ASCII byte
-# Returns the next color-table pointer in a0.
+#   * s0: current x
+#   * s1: y
+#   * s2: text pointer
+#   * s3: current color-table pointer
+#   * s4: scale
+#   * s5: glyph advance in pixels
+#   * t0: current ASCII byte
 draw_rainbow_string:
     addi sp, sp, -32
     sw ra, 28(sp)
@@ -232,15 +270,24 @@ draw_rainbow_string:
     addi sp, sp, 32
     ret
 
-# a0=x, a1=y, a2=NUL-terminated ASCII, a3=color, a4=scale.
+# ------------------------------------------------------------------------------
+# Draw a string in a single color.
+#
+# In:
+#   * a0: x
+#   * a1: y
+#   * a2: NUL-terminated ASCII
+#   * a3: color
+#   * a4: scale
+#
 # Register map:
-#   s0 = current x
-#   s1 = y
-#   s2 = text pointer
-#   s3 = color
-#   s4 = scale
-#   s5 = glyph advance in pixels
-#   t0 = current ASCII byte
+#   * s0: current x
+#   * s1: y
+#   * s2: text pointer
+#   * s3: color
+#   * s4: scale
+#   * s5: glyph advance in pixels
+#   * t0: current ASCII byte
 draw_string:
     addi sp, sp, -32
     sw ra, 28(sp)
@@ -285,19 +332,32 @@ draw_string:
     addi sp, sp, 32
     ret
 
-# a0=x, a1=y, a2=current colortable pointer, a3=scale, a4=ASCII.
-# Each glyph column uses one color-table entry. Returns the next entry in a0.
+# ------------------------------------------------------------------------------
+# Draw one glyph with a transient color per column.
+#
+# In:
+#   * a0: x
+#   * a1: y
+#   * a2: current color-table pointer
+#   * a3: scale
+#   * a4: ASCII character
+#
+# Out:
+#   * a0: next color-table pointer
+#
+# Each glyph column uses one color-table entry.
+#
 # Register map:
-#   s0 = base x
-#   s1 = base y
-#   s2 = current color-table pointer
-#   s3 = scale
-#   s4 = font pointer
-#   s5 = glyph column
-#   s6 = glyph row
-#   s7 = current glyph column bitmap
-#   t0 = scratch
-#   t1 = scratch
+#   * s0: base x
+#   * s1: base y
+#   * s2: current color-table pointer
+#   * s3: scale
+#   * s4: font pointer
+#   * s5: glyph column
+#   * s6: glyph row
+#   * s7: current glyph column bitmap
+#   * t0: scratch
+#   * t1: scratch
 draw_rainbow_char:
     addi sp, sp, -48
     sw ra, 44(sp)
@@ -374,18 +434,27 @@ draw_rainbow_char:
     addi sp, sp, 48
     ret
 
-# a0=x, a1=y, a2=color, a3=scale, a4=ASCII. Font is 5 columns x 7 rows.
+# ------------------------------------------------------------------------------
+# Draw one glyph in a single color. Font is 5 columns x 7 rows.
+#
+# In:
+#   * a0: x
+#   * a1: y
+#   * a2: color
+#   * a3: scale
+#   * a4: ASCII character
+#
 # Register map:
-#   s0 = base x
-#   s1 = base y
-#   s2 = color
-#   s3 = scale
-#   s4 = font pointer
-#   s5 = glyph column
-#   s6 = glyph row
-#   s7 = current glyph column bitmap
-#   t0 = scratch
-#   t1 = scratch
+#   * s0: base x
+#   * s1: base y
+#   * s2: color
+#   * s3: scale
+#   * s4: font pointer
+#   * s5: glyph column
+#   * s6: glyph row
+#   * s7: current glyph column bitmap
+#   * t0: scratch
+#   * t1: scratch
 draw_char:
     addi sp, sp, -48
     sw ra, 44(sp)

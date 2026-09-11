@@ -4,6 +4,7 @@
 
 .section .text
 
+# ------------------------------------------------------------------------------
 # Configure UART0 at 115200 8-N-1. GP0 is the Pico TX pin connected to the
 # Debug Probe's UART RX pin; GP1 is configured for optional future input.
 uart_init:
@@ -41,7 +42,11 @@ uart_init:
     sw t1, UART_CR(t0)
     ret
 
-# a0=byte. Blocks until the UART0 TX FIFO can accept it.
+# ------------------------------------------------------------------------------
+# Write a byte to UART0, blocking until the TX FIFO can accept it.
+#
+# In:
+#   * a0: byte to write
 uart_write_byte:
     li t0, UART0_BASE
 1:
@@ -51,7 +56,11 @@ uart_write_byte:
     sw a0, UART_DR(t0)
     ret
 
-# a0=NUL-terminated string address.
+# ------------------------------------------------------------------------------
+# Write a NUL-terminated string to UART0.
+#
+# In:
+#   * a0: string address
 uart_write_string:
     addi sp, sp, -16
     sw ra, 12(sp)

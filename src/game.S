@@ -16,12 +16,9 @@
 .equ FLOOR_COLOR, 0xd618
 .equ ROOF_COLOR, 0x5a08
 
-# ***************************************************
-# This starts the main gameloop performing the following steps
-#   * handle input
-#   * update game state
-#   * render the frame
-#   * wait till the frame's deadline is reached for constane fps
+# ------------------------------------------------------------------------------
+# Run the main game loop: handle input, update game state, render the
+# frame, then wait until the frame deadline for a constant frame rate.
 gameloop:
         LOG_STRING enter_gameloop_msg
         li a0, 0x0000
@@ -50,11 +47,13 @@ gameloop:
 
 
 
-# ***************************************************
+# ------------------------------------------------------------------------------
+# Read and process player input for the current frame.
 read_input:
         ret
 
-# ***************************************************
+# ------------------------------------------------------------------------------
+# Advance the game state by one frame.
 game_update:
         addi sp, sp, -16
         sw ra, 12(sp)
@@ -77,20 +76,24 @@ game_update:
         addi sp, sp, 16
         ret
 
+# ------------------------------------------------------------------------------
+# Render the current frame: draw the roof and floor, then cast one ray per
+# screen column and draw the projected wall.
+#
 # Register map:
-#   s0  = screen column x (integer)
-#   s1  = side_dist_y (Q16.16)
-#   s2  = camera_x (Q16.16), then rendered column pixel count
-#   s3  = ray_dir_x (Q16.16)
-#   s4  = ray_dir_y (Q16.16)
-#   s5  = map_x (integer)
-#   s6  = map_y (integer)
-#   s7  = delta_dist_x (Q16.16)
-#   s8  = delta_dist_y (Q16.16)
-#   s9  = step_x (integer, -1 or +1)
-#   s10 = step_y (integer, -1 or +1)
-#   s11 = side_dist_x (Q16.16)
-#   t0-t6/a0-a1 = short-lived scratch and call arguments.
+#   * s0: screen column x (integer)
+#   * s1: side_dist_y (Q16.16)
+#   * s2: camera_x (Q16.16), then rendered column pixel count
+#   * s3: ray_dir_x (Q16.16)
+#   * s4: ray_dir_y (Q16.16)
+#   * s5: map_x (integer)
+#   * s6: map_y (integer)
+#   * s7: delta_dist_x (Q16.16)
+#   * s8: delta_dist_y (Q16.16)
+#   * s9: step_x (integer, -1 or +1)
+#   * s10: step_y (integer, -1 or +1)
+#   * s11: side_dist_x (Q16.16)
+#   * t0-t6, a0-a1: short-lived scratch and call arguments
 render_frame:
         addi sp, sp, -64
         sw ra, 60(sp)
@@ -247,7 +250,7 @@ render_frame:
         beqz t0, .Ldda_loop
 
 .Lwall_hit:
-        # ****************************************
+        # ------------------------------------------------------------------------------
         # distance projected on camera direction
         li t0, FP_ZERO             # perpWallDist
         beqz a0, .Lwall_x
@@ -260,7 +263,7 @@ render_frame:
 
         mv s3, a0                   # store wall hit side
 
-        # ****************************************
+        # ------------------------------------------------------------------------------
         #  height of line
         li t1, 512                  # 1/128 in Q16.16
         ble t0, t1, .Lfull_height_column
@@ -289,7 +292,7 @@ render_frame:
         li t5, SCREEN_HEIGHT - 1
         li s2, SCREEN_HEIGHT
 
-        # ****************************************
+        # ------------------------------------------------------------------------------
         # Draw column line
 .Ldraw_wall_column:
         mv a0, s0                   # x0
@@ -326,8 +329,8 @@ render_frame:
         addi sp, sp, 64
         ret
 
-# ***************************************************
-# Start a new frame timer
+# ------------------------------------------------------------------------------
+# Record the start of the current frame's time window.
 set_frame_start:
         addi sp, sp, -16
         sw ra, 12(sp)
@@ -340,8 +343,8 @@ set_frame_start:
         addi sp, sp, 16
         ret
 
-# ***************************************************
-# Wait till the frametime deadline is reached
+# ------------------------------------------------------------------------------
+# Wait until the current frame's time deadline is reached.
 wait_frame_time:
         addi sp, sp, -16
         sw ra, 12(sp)
@@ -377,17 +380,14 @@ wait_frame_time:
         ret
 
 
-# ***************************************************
 
 
 
 
-# ***************************************************
 .section .bss
 .align 2
 frame_start_us: .space 4
 
-# ***************************************************
 .section .data
 .align 2
 player_pos_x: .word 22 * FP_ONE
@@ -399,7 +399,6 @@ plane_y:      .word (66 * FP_ONE + 50) / 100
 rot_speed:    .word 50 * FP_ONE / 10000
 move_speed:   .word (50 * FP_ONE + 50) / 100
 
-# ***************************************************
 .section .rodata
 .align 2
 enter_gameloop_msg:

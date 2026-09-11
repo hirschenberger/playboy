@@ -4,11 +4,15 @@
 .section .text
 .align 2
 
-# a0 = x
-# a1 = y
-# a2 = width
-# a3 = height
-# a4 = color
+# ------------------------------------------------------------------------------
+# Draw an axis-aligned rectangle into the framebuffer.
+#
+# In:
+#   * a0: x
+#   * a1: y
+#   * a2: width
+#   * a3: height
+#   * a4: RGB565 color
 draw_rect:
     # t0 = framebuffer address
     la      t0, .Ldraw_buffer
@@ -60,7 +64,8 @@ row_done:
 done:
     ret
 
-# *****************************************
+# ------------------------------------------------------------------------------
+# Copy the framebuffer to the LCD panel.
 flip_buffer:
     addi sp, sp, -16
     sw ra, 12(sp)
@@ -72,7 +77,6 @@ flip_buffer:
     addi sp, sp, 16
     ret
 
-# *****************************************
 .section .bss
 .align 2
 .Ldraw_buffer:
