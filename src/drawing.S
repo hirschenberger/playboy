@@ -1,7 +1,8 @@
 #include "rp2350.h"
+#include "lcd.h"
 
 .global write_color, lcd_clear, fill_rect, draw_rainbow_string, draw_rainbow_char
-.global rainbow_colors_end, rainbow_colors
+.global rainbow_colors_end, rainbow_colors, draw_buffer, write_buffer
 
 .section .text
 # a0=RGB565 color, a1=pixel count. set_window must already have selected LCD.
@@ -9,48 +10,114 @@ write_color:
     srli t2, a0, 8
     andi t3, a0, 0xff
     li t0, SPI1_BASE
-0:
-    beqz a1, 4f
+.Lwc_batch_loop:
+    beqz a1, .Lwc_done
     # The RP2350 SPI FIFO holds eight bytes. Send up to four pixels before
     # draining their matching RX bytes, keeping the transmitter full safely.
     li t4, 4
-    bge a1, t4, 1f
+    bge a1, t4, .Lwc_size_ok
     mv t4, a1
-1:
+.Lwc_size_ok:
     mv t5, t4
-2:
+.Lwc_send_hi:
     lw t1, SPI_SR(t0)
     andi t1, t1, SPI_SR_TNF
-    beqz t1, 2b
+    beqz t1, .Lwc_send_hi
     sh t2, SPI_DR(t0)
-3:
+.Lwc_send_lo:
     lw t1, SPI_SR(t0)
     andi t1, t1, SPI_SR_TNF
-    beqz t1, 3b
+    beqz t1, .Lwc_send_lo
     sh t3, SPI_DR(t0)
     addi t5, t5, -1
-    bnez t5, 2b
+    bnez t5, .Lwc_send_hi
 
     slli t5, t4, 1
-5:
+.Lwc_drain_loop:
     lw t1, SPI_SR(t0)
     andi t1, t1, SPI_SR_RNE
-    beqz t1, 5b
+    beqz t1, .Lwc_drain_loop
     lw t1, SPI_DR(t0)
     addi t5, t5, -1
-    bnez t5, 5b
+    bnez t5, .Lwc_drain_loop
     sub a1, a1, t4
-    j 0b
-4:
+    j .Lwc_batch_loop
+.Lwc_done:
     lw t1, SPI_SR(t0)
     andi t1, t1, SPI_SR_BSY
-    bnez t1, 4b
+    bnez t1, .Lwc_done
     li t0, SIO_BASE
     li t1, LCD_CS_MASK
     sw t1, SIO_GPIO_OUT_SET(t0)
     ret
 
+# a0: buffer addr
+# Select the whole panel once, then stream the entire framebuffer in a
+# single RAMWR pass instead of issuing set_window/write_color per pixel.
+draw_buffer:
+    addi sp, sp, -16
+    sw ra, 12(sp)
+    sw s0, 8(sp)
 
+    mv s0, a0                # save buffer address
+
+    li a0, 0
+    li a1, SCREEN_WIDTH-1
+    li a2, 0
+    li a3, SCREEN_HEIGHT-1
+    call set_window
+
+    mv a0, s0
+    call write_buffer
+
+    lw ra, 12(sp)
+    lw s0, 8(sp)
+    addi sp, sp, 16
+    ret
+
+# a0: buffer addr. Writes all SCREEN_WIDTH*SCREEN_HEIGHT pixels (BUFFER_BYTES
+# bytes) row-major in one pass. set_window must already have selected LCD and
+# left CS low in data mode. Sends a byte at a time, batching into the 8-byte
+# FIFO to stay within the RP2350 SPI's TX/RX depth, then raises CS.
+write_buffer:
+    li t0, SPI1_BASE
+    li t2, BUFFER_BYTES      # bytes remaining
+.Lwb_batch_loop:
+    beqz t2, .Lwb_done
+    li t4, 4
+    bge t2, t4, .Lwb_size_ok
+    mv t4, t2
+.Lwb_size_ok:
+    mv t5, t4                # bytes to send this batch
+.Lwb_send_loop:
+    lw t1, SPI_SR(t0)
+    andi t1, t1, SPI_SR_TNF
+    beqz t1, .Lwb_send_loop
+    lbu t6, 0(a0)
+    sb t6, SPI_DR(t0)
+    addi a0, a0, 1
+    addi t5, t5, -1
+    bnez t5, .Lwb_send_loop
+
+    mv t5, t4                # drain matching RX bytes
+.Lwb_drain_loop:
+    lw t1, SPI_SR(t0)
+    andi t1, t1, SPI_SR_RNE
+    beqz t1, .Lwb_drain_loop
+    lw t1, SPI_DR(t0)
+    addi t5, t5, -1
+    bnez t5, .Lwb_drain_loop
+
+    sub t2, t2, t4
+    j .Lwb_batch_loop
+.Lwb_done:
+    lw t1, SPI_SR(t0)
+    andi t1, t1, SPI_SR_BSY
+    bnez t1, .Lwb_done
+    li t0, SIO_BASE
+    li t1, LCD_CS_MASK
+    sw t1, SIO_GPIO_OUT_SET(t0)
+    ret
 
 # a0=color. Clear all 320*240 pixels.
 lcd_clear:

@@ -1,5 +1,6 @@
 #include "macros.h"
 #include "math.h"
+#include "lcd.h"
 
 .section .text
 .align 2
@@ -11,8 +12,6 @@
 
 .equ MAP_WIDTH, 32
 .equ MAP_HEIGHT, 32
-.equ SCREEN_WIDTH, 320
-.equ SCREEN_HEIGHT, 240
 .equ FLOOR_COLOR, 0xd618
 .equ ROOF_COLOR, 0x5a08
 
@@ -24,8 +23,20 @@
 #   * wait till the frame's deadline is reached for constane fps
 gameloop:
         LOG_STRING enter_gameloop_msg
-        li a0, 0xff00
+        li a0, 0x0000
         call lcd_clear
+        li a0, 0xffff
+        call lcd_clear
+
+    1:
+        li a0, 10
+        li a1, 30
+        li a2, 200
+        li a3, 100
+        li a4, 0xfefe
+        call draw_rect
+        call flip_buffer
+        j 1b
 
 .Lnext_frame:
         call set_frame_start
@@ -217,7 +228,7 @@ render_frame:
 .Lstep_y:
         add s1, s1, s8
         add s6, s6, s10
-        li a0, 1
+        li a0, 2
 
 .Lcheck_wall:
         # check ray wall hit
