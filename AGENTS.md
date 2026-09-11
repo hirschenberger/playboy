@@ -122,6 +122,56 @@ versioned.
   startup and linker script must be extended together to handle remaining
   bytes.
 
+## Formatting Conventions
+
+### Assembly indentation
+
+- Indent every assembler instruction line (and in-body comment lines) by exactly
+  8 spaces. Labels, `.global`, `.section`, `.equ`, and other top-level
+  directives stay at column 0. Use spaces, not tabs.
+
+### Function header comments
+
+Every function is introduced by a consistent comment block of this form:
+
+```asm
+# ------------------------------------------------------------------------------
+# <description of what the routine does>.
+#
+# In:
+#   * a0: ...
+#   * a1: ...
+#
+# Out:
+#   * a0: ...
+#
+# Register map:
+#   * s0: ...
+#   * a1:a0: ...
+```
+
+- The top separator is a single `# ` followed by 78 dashes (an 80-column line).
+  There is no closing/bottom separator line.
+- The description is one or more `#`-prefixed lines starting with a period.
+- Separated by a blank `#` line, list `# In:` arguments, `# Out:` return
+  values, and `# Register map:` callee-saved/64-bit registers as needed. Each
+  bullet is `#   * <reg>: <role>` (three spaces, asterisk, space). Sections
+  that do not apply are omitted; only a description is required.
+- Place the comment immediately above the function label, sharing its
+  indentation (column 0). Consecutive statements that belong after the final
+  `*` bullet are written as plain `#` comment lines following the block.
+- Use consistent phrasing across routines: nouns or imperative verbs, an
+  explicit `In:`/`Out:` split, and full caller-/callee-saved register maps for
+  non-leaf routines.
+
+### Comment preprocessor pitfall
+
+Because `.S` files run through the C preprocessor, a line beginning with `#`
+followed by a directive keyword (`#if`, `#ifdef`, `#define`, `#else`, and so
+on) is parsed as a preprocessor directive, not a comment, and will break the
+build. Never start a comment with a directive keyword; rephrase (for example,
+use `# When ...` instead of `# if ...`).
+
 ## Commands and Validation
 
 ```sh
