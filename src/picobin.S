@@ -1,5 +1,6 @@
 .global picobin_start
 
+# ------------------------------------------------------------------------------
 .section .picobin, "a"            # RP2350 Boot ROM metadata, placed first in flash.
 .align 2
 picobin_start:

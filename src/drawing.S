@@ -525,6 +525,7 @@ draw_char:
         addi sp, sp, 48
         ret
 
+# ------------------------------------------------------------------------------
 .section .rodata
 # Printable ASCII 0x20 through 0x5a; columns are LSB-top bitmap data.
 font5x7:

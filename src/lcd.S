@@ -426,6 +426,7 @@ lcd_write_byte:
         sw t1, SIO_GPIO_OUT_SET(t0)
         ret
 
+# ------------------------------------------------------------------------------
 .section .rodata
 
 st7789_madctl: .byte 0x60

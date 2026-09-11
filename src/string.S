@@ -51,7 +51,7 @@ itoa:
         mv a0, t0
         ret
 
-
+# ------------------------------------------------------------------------------
 .section .bss
 .align 1
 itoa_buffer: .space ITOA_BUFFER_SIZE

@@ -379,13 +379,10 @@ wait_frame_time:
         addi sp, sp, 16
         ret
 
-
-
-
-
-
+# ------------------------------------------------------------------------------
 .section .bss
 .align 2
+
 frame_start_us: .space 4
 
 .section .data
@@ -399,8 +396,10 @@ plane_y:      .word (66 * FP_ONE + 50) / 100
 rot_speed:    .word 50 * FP_ONE / 10000
 move_speed:   .word (50 * FP_ONE + 50) / 100
 
+# ------------------------------------------------------------------------------
 .section .rodata
 .align 2
+
 enter_gameloop_msg:
         .asciz "INFO: Enter gameloop"
 

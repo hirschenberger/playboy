@@ -24,11 +24,11 @@ uart_init:
         not t2, t2
         and t1, t1, t2
         sw t1, RESETS_RESET(t0)
-1:
+.Lnext:
         lw t1, RESETS_RESET_DONE(t0)
         li t2, RESETS_UART0_BIT
         and t1, t1, t2
-        beqz t1, 1b
+        beqz t1, .Lnext
 
         li t0, UART0_BASE
         sw zero, UART_CR(t0)
@@ -49,10 +49,10 @@ uart_init:
 #   * a0: byte to write
 uart_write_byte:
         li t0, UART0_BASE
-1:
+.Lnext:
         lw t1, UART_FR(t0)
         andi t1, t1, UART_FR_TXFF
-        bnez t1, 1b
+        bnez t1, .Lnext
         sw a0, UART_DR(t0)
         ret
 

@@ -70,6 +70,7 @@ draw_title:
         addi sp, sp, 32
         ret
 
+# ------------------------------------------------------------------------------
 .section .rodata
 hello_text:
         .asciz   "   TAKE FIVE    "

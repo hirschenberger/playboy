@@ -77,6 +77,7 @@ flip_buffer:
         addi sp, sp, 16
         ret
 
+# ------------------------------------------------------------------------------
 .section .bss
 .align 2
 .Ldraw_buffer:
