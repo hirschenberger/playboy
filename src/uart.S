@@ -1,7 +1,8 @@
 #include "rp2350.h"
 
-.section .text
 .global uart_init, uart_write_byte, uart_write_string
+
+.section .text
 
 # Configure UART0 at 115200 8-N-1. GP0 is the Pico TX pin connected to the
 # Debug Probe's UART RX pin; GP1 is configured for optional future input.

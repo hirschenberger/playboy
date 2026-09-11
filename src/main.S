@@ -1,9 +1,10 @@
 #include "rp2350.h"
 #include "macros.h"
 
+.global main, delay_ms
+
 .section .text
 .align 2
-.global main, delay_ms
 .type main, @function
 
 main:

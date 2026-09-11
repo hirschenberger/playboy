@@ -2,10 +2,11 @@
 #include "math.h"
 #include "lcd.h"
 
-.section .text
-.align 2
 .global gameloop
 .extern fp_div
+
+.section .text
+.align 2
 
 .equ TARGET_FPS, 60
 .equ FRAME_TIME_US, 1000 * 1000 / TARGET_FPS

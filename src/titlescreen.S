@@ -1,5 +1,6 @@
-.section .text
 .global draw_title
+
+.section .text
 
 # a0: how many milliseconds to display
 draw_title:

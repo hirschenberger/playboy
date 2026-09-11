@@ -1,5 +1,7 @@
 #include "math.h"
 
+.global fp_mul, fp_div, fp_clamp, sin_cos, rotate_vec
+
 .section .text
 .align 2
 
@@ -51,7 +53,6 @@
  * This correctly preserves the upper bits of the product.
  *
  * ============================================================ */
-.globl fp_mul
 fp_mul:
     mul     t0, a0, a1       # low 32 bits
     mulh    t1, a0, a1       # high 32 bits, signed
@@ -86,7 +87,6 @@ fp_mul:
  * division using unsigned division after handling the signs.
  *
  * ============================================================ */
-.globl fp_div
 fp_div:
     /*
      * Save result sign.
@@ -201,7 +201,6 @@ fp_div:
  *   a0 = clamped value
  * ============================================================ */
 
-.globl fp_clamp
 fp_clamp:
     blt     a0, a1, 1f
     bgt     a0, a2, 2f
@@ -217,14 +216,12 @@ fp_clamp:
 
     .section .text
     .align 2
-    .globl sin_cos
     .type sin_cos, @function
 
 # a0: unsigned 16-bit turn angle
 # a1: X (Q16.16)
 # a2: Y (Q16.16)
 # Returns rotated X in a0 and rotated Y in a1.
-.global rotate_vec
 rotate_vec:
         addi sp, sp, -32
         sw ra, 28(sp)
@@ -282,7 +279,6 @@ rotate_vec:
 #   0° .. 90°
 # ------------------------------------------------------------
 
-.global sin_cos
 sin_cos:
     # Keep only the 16-bit angle
     slli    a0, a0, 16

@@ -1,8 +1,9 @@
 #include "rp2350.h"
 
+.global timer0_init, timer0_read_us, delay_ms
+
 .section .text
 .align 2
-.global timer0_init, timer0_read_us, delay_ms
 
 # Configure TIMER0 to count the dedicated TIMER0 tick, with one tick per µs.
 timer0_init:

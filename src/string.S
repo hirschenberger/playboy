@@ -1,9 +1,9 @@
 #include "macros.h"
 
+.global itoa
+
 .section .text
 .align 2
-
-.global itoa
 
 .equ ITOA_BUFFER_SIZE, 12
 

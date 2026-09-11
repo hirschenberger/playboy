@@ -1,6 +1,7 @@
+.global _reset_handler, _trap_handler
+
 .section .reset, "ax"             # Kept at the boot address by the linker script.
 .align 2                          # Instructions and word accesses require 4-byte alignment.
-.global _reset_handler
 .type _reset_handler, @function
 _reset_handler:
     la sp, __stack_top            # The stack grows downward from the top of SRAM.
@@ -33,7 +34,6 @@ _reset_handler:
     wfi                           # If it does, sleep rather than falling into data.
     j 5b
 
-.global _trap_handler
 .type _trap_handler, @function
 _trap_handler:
     # A trap is fatal in this minimal runtime. Halt here for SWD inspection.
