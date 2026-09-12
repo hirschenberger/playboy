@@ -1,6 +1,6 @@
 #include "rp2350.h"
 
-.global lcd_init, set_window
+.global lcd_init, draw_buffer
 .extern uart_init
 .extern timer0_init
 
@@ -20,6 +20,87 @@ lcd_init:
 
         lw ra, 12(sp)
         addi sp, sp, 16
+        ret
+
+# ------------------------------------------------------------------------------
+# Stream the entire framebuffer to the panel in a single RAMWR pass
+# instead of issuing set_window per pixel.
+#
+# In:
+#   * a0: buffer address
+#   * a1: buffer_bytes
+draw_buffer:
+        addi sp, sp, -16
+        sw ra, 12(sp)
+        sw s0, 8(sp)
+        sw s1, 4(sp)
+
+        mv s0, a0                # save buffer address
+        mv s1, a1
+
+        li a0, 0
+        li a1, SCREEN_WIDTH-1
+        li a2, 0
+        li a3, SCREEN_HEIGHT-1
+        call set_window
+
+        mv a0, s0
+        mv a1, s1
+        call write_buffer
+
+        lw ra, 12(sp)
+        lw s0, 8(sp)
+        lw s1, 4(sp)
+        addi sp, sp, 16
+        ret
+
+# ------------------------------------------------------------------------------
+# Write all SCREEN_WIDTH*SCREEN_HEIGHT pixels (BUFFER_BYTES bytes) row-major
+# in one pass, byte at a time, batching into the 8-byte FIFO to stay within
+# the RP2350 SPI's TX/RX depth, then raises CS.
+#
+# In:
+#   * a0: buffer address
+#   * a1: buffer_bytes
+#
+# set_window must already have selected the LCD and left CS low in data mode.
+write_buffer:
+        li t0, SPI1_BASE
+.Lwb_batch_loop:
+        beqz a1, .Lwb_done
+        li t4, 4
+        bge a1, t4, .Lwb_size_ok
+        mv t4, a1
+.Lwb_size_ok:
+        mv t5, t4                # bytes to send this batch
+.Lwb_send_loop:
+        lw t1, SPI_SR(t0)
+        andi t1, t1, SPI_SR_TNF
+        beqz t1, .Lwb_send_loop
+        lbu t6, 0(a0)
+        sb t6, SPI_DR(t0)
+        addi a0, a0, 1
+        addi t5, t5, -1
+        bnez t5, .Lwb_send_loop
+
+        mv t5, t4                # drain matching RX bytes
+.Lwb_drain_loop:
+        lw t1, SPI_SR(t0)
+        andi t1, t1, SPI_SR_RNE
+        beqz t1, .Lwb_drain_loop
+        lw t1, SPI_DR(t0)
+        addi t5, t5, -1
+        bnez t5, .Lwb_drain_loop
+
+        sub a1, a1, t4
+        j .Lwb_batch_loop
+.Lwb_done:
+        lw t1, SPI_SR(t0)
+        andi t1, t1, SPI_SR_BSY
+        bnez t1, .Lwb_done
+        li t0, SIO_BASE
+        li t1, LCD_CS_MASK
+        sw t1, SIO_GPIO_OUT_SET(t0)
         ret
 
 # ------------------------------------------------------------------------------

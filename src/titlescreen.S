@@ -24,7 +24,7 @@ draw_title:
         call timer0_read_us
         mv s4, a0                     # start time, low word
 
-1:
+.Lnext_cycle:
         li a0, 20
         li a1, 80
         li a2, 280
@@ -46,13 +46,16 @@ draw_title:
         lhu a4, 0(s1)
         call fill_rect
 
-        li a0, 15
+        # Push the completed title frame to the panel.
+        call flip_buffer
+
+        li a0, 5
         call delay_ms
 
         # Move the rainbow phase backward by one RGB565 entry per frame.
         addi s1, s1, -2
         la t0, rainbow_colors
-        bgeu s1, t0, 1b
+        bgeu s1, t0, .Lnext_cycle
 
         # The decrement passed the first entry; wrap to the final entry.
         addi s1, s2, -2
@@ -60,7 +63,7 @@ draw_title:
         # check timeout
         call timer0_read_us
         sub t0, a0, s4
-        bltu t0, s3, 1b
+        bltu t0, s3, .Lnext_cycle
 
         lw ra, 28(sp)
         lw s1, 24(sp)

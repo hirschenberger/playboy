@@ -106,14 +106,14 @@ render_frame:
         li a2, SCREEN_WIDTH
         li a3, SCREEN_HEIGHT / 2
         li a4, ROOF_COLOR
-        call draw_rect
+        call fill_rect
 
         li a0, 0
         li a1, SCREEN_HEIGHT / 2
         li a2, SCREEN_WIDTH
         li a3, SCREEN_HEIGHT / 2
         li a4, FLOOR_COLOR
-        call draw_rect
+        call fill_rect
 
 .Lrender_column_loop:
         # camera_x = 2 * x / (SCREEN_WIDTH - 1) - 1.0
@@ -291,7 +291,7 @@ render_frame:
         li a4, 0xf3c1
         # different shade depending on side
         srl a4, a4, s3
-        call draw_rect
+        call fill_rect
 
         # next x pos
         addi s0, s0, 1

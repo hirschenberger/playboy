@@ -23,18 +23,23 @@ versioned.
 
 1. `src/picobin.S` is the first flash block at `0x10000000`. The RP2350 Boot
    ROM reads `IMAGE_TYPE=0x1101`, `_reset_handler`, and `__stack_top`.
-2. `src/start.S` initializes the stack, copies `.data` from flash to RAM,
-   clears `.bss`, and calls `main`. Only a return from `main` is guaranteed to
-   end in a `wfi` loop. `_trap_handler` also exists, but the current code does
-   not install it through `mtvec`; the firmware therefore does not define the
-   actual trap destination.
+2. `src/start.S` forks on `mhartid`: core 0 initializes the stack, copies
+   `.data` from flash to RAM, clears `.bss`, and calls `main`; core 1 loads its
+   own stack and parks in a `wfi` loop. Only a return from `main` is guaranteed
+   to end in a `wfi` loop. `_trap_handler` also exists, but the current code
+   does not install it through `mtvec`; the firmware therefore does not define
+   the actual trap destination.
 3. `lcd_init` in `src/lcd.S` initializes the clock tree, TIMER0, UART0, LCD
    GPIO, SPI1, and the ST7789VW in that order.
-4. `main` in `src/main.S` writes the UART boot message, clears the screen, and
-   draws bars and rainbow text in an infinite loop.
-5. Drawing flow: `draw_rainbow_string` -> `draw_rainbow_char` -> `fill_rect`
-   -> `set_window` -> `write_color`. One color-table position applies to each
-   glyph column; `draw_rainbow_char` returns the next color pointer in `a0`.
+4. `main` in `src/main.S` writes the UART boot message, clears the framebuffer,
+   and draws the title and game loop.
+5. Drawing flow: `draw_string`/`draw_rainbow_string` -> `draw_char`/
+   `draw_rainbow_char` -> `fill_rect`, which all write into the shared
+   `draw_buffer` framebuffer. One color-table position applies to each glyph
+   column; `draw_rainbow_char` returns the next color pointer in `a0`.
+   The framebuffer is copied to the panel by `flip_buffer` -> `draw_buffer` ->
+   `write_buffer` over SPI1. Only the SPI streaming path in `src/drawing.S`
+   touches the panel; the drawing functions never call `set_window` directly.
 6. UART flow: NUL-terminated string in `a0` -> `uart_write_string` ->
    `uart_write_byte` -> UART0 TX on GP0.
 
@@ -49,14 +54,24 @@ versioned.
 - `src/picobin.S`: Boot ROM metadata. Do not change its format, markers,
   `0x1101`, entry point, or stack address without a verified RP2350 boot
   requirement.
-- `src/start.S`: minimal runtime and a trap endpoint that is not currently
-  installed explicitly.
+- `src/start.S`: minimal runtime that forks on `mhartid` (core 0 runs `main`,
+  core 1 parks in a `wfi` loop on a second stack), and a trap endpoint that is
+  not currently installed explicitly.
 - `src/rp2350.h`: central register addresses, bits, pins, and clock divisors.
   Verify values against RP2350 documentation; some RP2040 bits differ.
-- `src/lcd.S`: 12 MHz XOSC/PLL_SYS setup for 150 MHz, GPIO/SPI1, and the
-  vendor-specific ST7789VW initialization sequence.
-- `src/main.S`: frame loop, rectangle/text renderers, font, and RGB565
-  gradient.
+- `src/lcd.S`: 12 MHz XOSC/PLL_SYS setup for 150 MHz, GPIO/SPI1, the
+  vendor-specific ST7789VW initialization sequence, and `set_window`.
+- `src/draw_buffer.S`: all framebuffer drawing. `fill_rect` and `lcd_clear`
+  write into the shared `draw_buffer` RAM buffer instead of SPI; the text
+  renderers (`draw_string`, `draw_rainbow_string`, `draw_char`,
+  `draw_rainbow_char`), the `font5x7` and `rainbow_colors` data, and
+  `flip_buffer` (copies the buffer to the panel) live here.
+- `src/drawing.S`: the SPI1 panel-output path only. `write_buffer` and
+  `draw_buffer` stream pixels to the LCD; they are the only code in this
+  module that drives SPI directly.
+- `src/main.S`: boot message and the application entry point (`lcd_init`,
+  framebuffer clear, title, then the game loop). The renderers and font now
+  live in `src/draw_buffer.S`, not here.
 - `src/timer.S`: TIMER0 reset release, 1 us tick setup through the RP2350
   TICKS block, and a blocking-free `timer0_read_us` helper.
 - `src/uart.S`: UART0 at 115200 8-N-1 on GP0/GP1 and blocking output.
@@ -110,10 +125,11 @@ versioned.
   modifying control flow.
 - RGB565 values are stored as halfwords and read with `lhu`. Here, `.align 1`
   means 2-byte alignment and is required for `rainbow_colors`.
-- `write_color` assumes `set_window` has already enabled RAMWR and left CS
-  low. It sends the high byte before the low byte and raises CS at the end.
-- `set_window` uses inclusive end coordinates; `fill_rect` computes
-  `x+width-1`, `y+height-1`, and sends `width*height` pixels.
+- `set_window` uses inclusive end coordinates and selects a RAMWR window.
+  `fill_rect` computes `x+width-1`, `y+height-1` and writes into the
+  framebuffer row by row, skipping the unwritten tail of each row. The older
+  `draw_rect` alias for SPI drawing has been folded into `fill_rect` (the
+  framebuffer one); callers now use `fill_rect`.
 - Font data covers ASCII `0x20` through `0x5a`. The renderers do not validate
   characters; lowercase letters or values outside this range read beyond the
   font table.
@@ -121,6 +137,9 @@ versioned.
   sections are empty; future section sizes must be multiples of four bytes, or
   startup and linker script must be extended together to handle remaining
   bytes.
+- Core 1 is launched by `mhartid` fork at reset in `start.S`; it does no work
+  yet. Both cores share one address space, so core 0 or core 1 may own a given
+  peripheral or RAM region once responsibilities are assigned.
 
 ## Formatting Conventions
 
@@ -217,18 +236,17 @@ behavior can only be validated conclusively on hardware.
   the cause nor any registers. Traps therefore cannot currently be caught
   reliably at this symbol and may appear as silent hangs.
 - All peripheral wait loops and initialization sequences lack timeouts.
-- Text is drawn pixel by pixel through many `fill_rect`/window transactions
-  and is intentionally slow; `write_color` optimizes only contiguous
-  single-color areas.
+- Text is drawn pixel by pixel through many `fill_rect` framebuffer writes
+  and is intentionally slow; the panel is streamed once per `flip_buffer`.
 - Persistent startup after a true power cycle has repeatedly been reported as
   problematic and is not conclusively known to be fixed in the current state.
   Change the picobin layout or `IMAGE_TYPE=0x1101` only with Boot ROM evidence
   and a subsequent true cold-start test.
 - The serial device name `/dev/ttyACM0` is host-dependent and hard-coded in
   `mise.toml`.
-- The comment for `draw_rainbow_string` in `src/main.S` is stale: each of the
-  five glyph columns, not each character, consumes one color-table entry; the
-  spacing column consumes none.
+- The comment for `draw_rainbow_string` in `src/draw_buffer.S` is stale: each
+  of the five glyph columns, not each character, consumes one color-table
+  entry; the spacing column consumes none.
 - `setup-debugger` clones the moving head of the `rpi-common` branch without a
   commit pin and does not update an existing checkout. OpenOCD builds are
   therefore not fully reproducible across fresh hosts.

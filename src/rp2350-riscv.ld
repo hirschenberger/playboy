@@ -44,6 +44,11 @@ SECTIONS
     . += 4096;
     __stack_top = .;
 
+    . = ALIGN(16);
+    __stack_bottom_core1 = .;
+    . += 4096;
+    __stack_top_core1 = .;
+
     /DISCARD/ :
     {
         *(.comment .note .eh_frame)
