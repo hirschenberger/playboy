@@ -41,7 +41,9 @@ row_loop:
 pixel_loop:
         beqz    t3, row_done
 
-        sh      a4, 0(t0)           # write 16-bit RGB565 pixel
+        rev8    t4, a4              # convert RGB565 to little-endian
+        srli    t4, t4, 16
+        sh      t4, 0(t0)           # write 16-bit RGB565 pixel
 
         addi    t0, t0, 2           # next pixel
         addi    t3, t3, -1

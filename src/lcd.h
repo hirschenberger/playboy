@@ -1,3 +1,4 @@
+# -*- mode: Assembly -*-
 .equ SCREEN_WIDTH, 320
 .equ SCREEN_HEIGHT, 240
 .equ BUFFER_BYTES, SCREEN_WIDTH * SCREEN_HEIGHT * 2

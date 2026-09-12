@@ -23,18 +23,6 @@ gameloop:
         LOG_STRING enter_gameloop_msg
         li a0, 0x0000
         call lcd_clear
-        li a0, 0xffff
-        call lcd_clear
-
-        1:
-        li a0, 10
-        li a1, 30
-        li a2, 200
-        li a3, 100
-        li a4, 0xfefe
-        call draw_rect
-        call flip_buffer
-        j 1b
 
 .Lnext_frame:
         call set_frame_start
@@ -118,14 +106,14 @@ render_frame:
         li a2, SCREEN_WIDTH
         li a3, SCREEN_HEIGHT / 2
         li a4, ROOF_COLOR
-        call fill_rect
+        call draw_rect
 
         li a0, 0
         li a1, SCREEN_HEIGHT / 2
         li a2, SCREEN_WIDTH
         li a3, SCREEN_HEIGHT / 2
         li a4, FLOOR_COLOR
-        call fill_rect
+        call draw_rect
 
 .Lrender_column_loop:
         # camera_x = 2 * x / (SCREEN_WIDTH - 1) - 1.0
@@ -232,7 +220,7 @@ render_frame:
 .Lstep_y:
         add s1, s1, s8
         add s6, s6, s10
-        li a0, 2
+        li a0, 1
 
 .Lcheck_wall:
         # check ray wall hit
@@ -296,17 +284,14 @@ render_frame:
         # Draw column line
 .Ldraw_wall_column:
         mv a0, s0                   # x0
-        mv a1, s0                   # x1: one display column
-        mv a2, t4                   # y0
-        mv a3, t5                   # y1
-        call set_window
-
+        mv a1, t4                   # x1: one display column
+        li a2, 1
+        sub a3, t5, t4
         # different shade depending on side
-        li a0, 0xe004
+        li a4, 0xf3c1
         # different shade depending on side
-        srl a0, a0, s3
-        mv a1, s2
-        call write_color
+        srl a4, a4, s3
+        call draw_rect
 
         # next x pos
         addi s0, s0, 1
@@ -369,9 +354,9 @@ wait_frame_time:
         call timer0_read_us
         sub t0, a0, s0                     # us already spent
         bltu t0, s1, .Lwait_next
-        j .Lfini
 
-.Lfini:
+        call flip_buffer
+
         lw ra, 12(sp)
         lw s0, 8(sp)
         lw s1, 4(sp)
