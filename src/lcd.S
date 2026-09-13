@@ -68,7 +68,7 @@ write_buffer:
         li t0, SPI1_BASE
 .Lwb_batch_loop:
         beqz a1, .Lwb_done
-        li t4, 4
+        li t4, 8
         bge a1, t4, .Lwb_size_ok
         mv t4, a1
 .Lwb_size_ok:
@@ -113,12 +113,12 @@ write_buffer:
 #   * a2: y0
 #   * a3: y1
 set_window:
-        addi sp, sp, -48
-        sw ra, 44(sp)
-        sw s0, 40(sp)
-        sw s1, 36(sp)
-        sw s2, 32(sp)
-        sw s3, 28(sp)
+        addi sp, sp, -32
+        sw ra, 28(sp)
+        sw s0, 24(sp)
+        sw s1, 20(sp)
+        sw s2, 16(sp)
+        sw s3, 12(sp)
 
         mv s0, a0
         mv s1, a1
@@ -155,12 +155,12 @@ set_window:
         li t1, LCD_CS_MASK
         sw t1, SIO_GPIO_OUT_CLR(t0)
 
-        lw s3, 28(sp)
-        lw s2, 32(sp)
-        lw s1, 36(sp)
-        lw s0, 40(sp)
-        lw ra, 44(sp)
-        addi sp, sp, 48
+        lw s3, 12(sp)
+        lw s2, 16(sp)
+        lw s1, 20(sp)
+        lw s0, 24(sp)
+        lw ra, 28(sp)
+        addi sp, sp, 32
         ret
 
 
@@ -455,10 +455,10 @@ lcd_data_byte:
 #   * a1: data address
 #   * a2: data byte count
 lcd_command_data:
-        addi sp, sp, -32
-        sw ra, 28(sp)
-        sw s0, 24(sp)
-        sw s1, 20(sp)
+        addi sp, sp, -16
+        sw ra, 12(sp)
+        sw s0, 8(sp)
+        sw s1, 4(sp)
 
         mv s0, a1
         mv s1, a2
@@ -472,10 +472,10 @@ lcd_command_data:
         addi s1, s1, -1
         j 0b
 1:
-        lw s1, 20(sp)
-        lw s0, 24(sp)
-        lw ra, 28(sp)
-        addi sp, sp, 32
+        lw s1, 4(sp)
+        lw s0, 8(sp)
+        lw ra, 12(sp)
+        addi sp, sp, 16
         ret
 
 # ------------------------------------------------------------------------------

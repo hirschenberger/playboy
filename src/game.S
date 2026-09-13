@@ -206,6 +206,10 @@ render_frame:
 .Lhave_side_dist_y_base:
         FP_MUL_Q16 s1, t0, s8, t1
 
+        # s4 (ray_dir_y) is no longer needed; reuse it for the level map base
+        # address to avoid reloading it inside the DDA loop.
+        la s4, level1
+
         # DDA and wall projection will consume the s-register state above.
 
         # a0: hit side
@@ -232,8 +236,7 @@ render_frame:
         mul t0, s6, t0              # y * width
         add t0, t0, s5              # + x
 
-        la t1, level1
-        add t1, t1, t0              # advance to calculated map pos
+        add t1, s4, t0              # advance to calculated map pos
         lb t0, 0(t1)                # map entry
         beqz t0, .Ldda_loop
 
@@ -335,7 +338,7 @@ wait_frame_time:
         sw ra, 12(sp)
         sw s0, 8(sp)
         sw s1, 4(sp)
-        sw s3, 0(sp)
+        sw s2, 0(sp)
 
         LOAD_WORD s0, frame_start_us       # Frame's start time
         li s1, FRAME_TIME_US               # Frame's allowed us

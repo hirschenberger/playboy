@@ -38,21 +38,23 @@ fill_rect:
         rev8 t4, a4               # convert RGB565 to little-endian
         srli t4, t4, 16
 
+        # Compute the row-to-row byte gap once (loop invariant).
+        li  t5, SCREEN_WIDTH
+        sub t5, t5, a2            # (SCREEN_WIDTH - width) pixels
+        slli t5, t5, 1            # * 2 bytes/pixel
+
         mv  t2, a3                # rows remaining
 1:
         beqz t2, .Lfill_rect_done
         mv  t3, a2                # pixels remaining this row
-2:
         beqz t3, .Lfill_rect_row_done
+2:
         sh  t4, 0(t0)             # write one RGB565 pixel
         addi t0, t0, 2
         addi t3, t3, -1
-        j   2b
+        bnez t3, 2b
 .Lfill_rect_row_done:
-        li  t5, SCREEN_WIDTH
-        sub t5, t5, a2            # (SCREEN_WIDTH - width) pixels
-        slli t5, t5, 1            # * 2 bytes/pixel
-        add t0, t0, t5
+        add t0, t0, t5            # skip unwritten tail (gap precomputed)
         addi t2, t2, -1
         j   1b
 .Lfill_rect_done:
@@ -245,17 +247,18 @@ draw_rainbow_char:
         sw s5, 20(sp)
         sw s6, 16(sp)
         sw s7, 12(sp)
+        sw s8, 8(sp)
 
         mv s0, a0
         mv s1, a1
         mv s2, a2
         mv s3, a3
         addi a4, a4, -32
-        li t0, 5
-        mul a4, a4, t0
         la s4, font5x7
-        add s4, s4, a4
+        sh2add t0, a4, a4          # t0 = (char-32)*5
+        add s4, s4, t0             # s4 = font5x7 + (char-32)*5
         li s5, 0
+        la s8, rainbow_colors_end # hoist end-of-table check out of column loop
 
 .Lrainbow_char_col_loop:
         li t0, 5
@@ -269,9 +272,7 @@ draw_rainbow_char:
         li t0, 7
         bge s6, t0, .Lrainbow_char_next_col
 
-        li t0, 1
-        sll t0, t0, s6
-        and t0, t0, s7
+        bext t0, s7, s6           # extract bit s6 from column bitmap
         beqz t0, .Lrainbow_char_next_row
 
         mul t0, s5, s3
@@ -289,8 +290,7 @@ draw_rainbow_char:
 
 .Lrainbow_char_next_col:
         addi s2, s2, 2
-        la t0, rainbow_colors_end
-        bltu s2, t0, .Lrainbow_char_color_ok
+        bltu s2, s8, .Lrainbow_char_color_ok
         la s2, rainbow_colors
 .Lrainbow_char_color_ok:
         addi s5, s5, 1
@@ -307,6 +307,7 @@ draw_rainbow_char:
         lw s5, 20(sp)
         lw s6, 16(sp)
         lw s7, 12(sp)
+        lw s8, 8(sp)
         addi sp, sp, 48
         ret
 
@@ -348,10 +349,9 @@ draw_char:
         mv s2, a2
         mv s3, a3
         addi a4, a4, -32
-        li t0, 5
-        mul a4, a4, t0
         la s4, font5x7
-        add s4, s4, a4
+        sh2add t0, a4, a4          # t0 = (char-32)*5
+        add s4, s4, t0             # s4 = font5x7 + (char-32)*5
         li s5, 0
 
 .Ldraw_char_col_loop:
@@ -366,9 +366,7 @@ draw_char:
         li t0, 7
         bge s6, t0, .Ldraw_char_next_col
 
-        li t0, 1
-        sll t0, t0, s6
-        and t0, t0, s7
+        bext t0, s7, s6           # extract bit s6 from column bitmap
         beqz t0, .Ldraw_char_next_row
 
         mul t0, s5, s3
