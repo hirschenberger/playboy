@@ -217,12 +217,17 @@ behavior can only be validated conclusively on hardware.
   initially builds OpenOCD locally. It then programs the UF2 and selects
   RISC-V if a BOOTSEL device is visible; otherwise it uses OpenOCD with
   `target/rp2350-riscv.cfg`.
-- After an ARM boot, the Hazard3 cores are unavailable over SWD. Connect the
-  Pico through its own USB data connection, enter BOOTSEL, and rerun
-  `mise run flash`.
-- `target remote` works for the flash workflow; `extended-remote` caused
-  protocol errors with this OpenOCD build. The interactive `debug` task still
-  uses `extended-remote` and is therefore potentially inconsistent.
+- When RISC-V core 0 cannot be examined (stuck busy, examination timeout, or
+  unavailable after an ARM boot), `mise run flash` automatically falls back to
+  flashing through the Cortex-M33 core: it issues a rescue reset, restarts
+  OpenOCD with `set USE_CORE { cm0 rv0 rv1 }` and `target/rp2350.cfg`, loads the
+  ELF via GDB with `set architecture arm`, then reboots. The picobin
+  `IMAGE_TYPE=0x1101` selects RISC-V on the next boot, and the task retries the
+  normal RISC-V verification path. If the CM0 fallback also fails, hold BOOTSEL
+  while connecting the Pico and rerun `mise run flash`.
+- `target remote` is used for both the flash workflow and the interactive
+  `debug` task; `extended-remote` caused protocol errors with this OpenOCD
+  build and must not be used.
 - Aborted sessions can leave OpenOCD, port 3333, or the CMSIS-DAP interface
   occupied. Terminate only the specifically identified process.
 - Hardware breakpoint resources are limited. Breakpoints on `.equ`

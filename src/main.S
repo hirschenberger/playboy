@@ -1,5 +1,5 @@
-#include "rp2350.h"
-#include "macros.h"
+.include "rp2350.h"
+.include "macros.h"
 
 .global main, delay_ms
 

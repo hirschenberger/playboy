@@ -1,4 +1,4 @@
-#include "lcd.h"
+.include "lcd.h"
 
 .global fill_rect, lcd_clear, flip_buffer
 .global draw_rainbow_string, draw_rainbow_char, draw_string, draw_char

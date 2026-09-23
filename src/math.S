@@ -1,4 +1,4 @@
-#include "math.h"
+.include "math.h"
 
 .global fp_mul, fp_div, fp_clamp, sin_cos, rotate_vec
 

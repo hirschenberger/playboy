@@ -1,4 +1,4 @@
-#include "rp2350.h"
+.include "rp2350.h"
 
 .global uart_init, uart_write_byte, uart_write_string
 

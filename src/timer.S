@@ -1,4 +1,4 @@
-#include "rp2350.h"
+.include "rp2350.h"
 
 .global timer0_init, timer0_read_us, delay_ms
 

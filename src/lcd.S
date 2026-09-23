@@ -1,4 +1,4 @@
-#include "rp2350.h"
+.include "rp2350.h"
 
 .global lcd_init, draw_buffer
 .extern uart_init
@@ -510,7 +510,9 @@ lcd_write_byte:
 # ------------------------------------------------------------------------------
 .section .rodata
 
-st7789_madctl: .byte 0x60
+# MADCTL: MX|MV|BGR. The BGR bit (0x08) is required: the ST7789VW panel
+# is wired BGR, so without it red and blue are swapped.
+st7789_madctl: .byte 0x68
 st7789_colmod: .byte 0x55
 st7789_b2:     .byte 0x0c, 0x0c, 0x00, 0x33, 0x33
 st7789_b7:     .byte 0x35

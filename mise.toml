@@ -32,6 +32,7 @@ asm_flags = "-march=rv32imac_zicsr_zifencei_zba_zbb_zbs_zbkb -mabi=ilp32 -fno-pi
 "apt:libtool" = "latest"
 "apt:pkg-config" = "latest"
 "apt:libusb-1.0-0-dev" = "latest"
+"apt:python3-pil" = "latest"
 
 [tasks.link]
 description = "Assemble and link standalone RP2350 RISC-V ELF"
@@ -39,7 +40,7 @@ sources = ["src/rp2350-riscv.ld", "src/**/*.S", "src/**/*.h", "src/**/*.inc"]
 outputs = ["{{vars.elf}}", "{{vars.map}}"]
 run = [
   "mkdir -p {{vars.build_dir}}",
-  "{{vars.clang}} -g {{vars.asm_flags}} -nostdlib -T src/rp2350-riscv.ld -Wl,-Map,{{vars.map}} src/*.S -o {{vars.elf}}",
+  "{{vars.clang}} -g {{vars.asm_flags}} -I {{vars.build_dir}} -nostdlib -T src/rp2350-riscv.ld -Wl,-Map,{{vars.map}} src/*.S -o {{vars.elf}}",
 ]
 
 [tasks.uf2]
@@ -72,7 +73,7 @@ make -j$(nproc)
 """
 
 [tasks.flash]
-description = "Flash through BOOTSEL when available, otherwise use RISC-V CMSIS-DAP SWD"
+description = "Flash through BOOTSEL when available, otherwise use RISC-V CMSIS-DAP SWD with CM0 fallback"
 depends = ["build", "setup-debugger"]
 run = """
 set -eu
@@ -87,13 +88,38 @@ fi
 openocd_pid=$!
 trap 'kill "$openocd_pid" 2>/dev/null || true; wait "$openocd_pid" 2>/dev/null || true' EXIT
 sleep 1
-if grep -Fq '[rp2350.rv0] unavailable' {{vars.openocd_log}}; then
-  echo "RISC-V cores are unavailable. Hold BOOTSEL while connecting the Pico, then rerun mise run flash." >&2
-  exit 1
-fi
-if grep -F '[rp2350.rv0]' {{vars.openocd_log}} | grep -Eq 'Examination failed|failed to halt|Failed to read|Target not examined'; then
-  echo "RISC-V core 0 could not be examined over SWD. Hold BOOTSEL while connecting the Pico, then rerun mise run flash." >&2
-  exit 1
+if grep -Fq '[rp2350.rv0] unavailable' {{vars.openocd_log}} || grep -F '[rp2350.rv0]' {{vars.openocd_log}} | grep -Eq 'Examination failed|failed to halt|Failed to read|Target not examined'; then
+  echo "RISC-V core 0 examination failed. Attempting rescue reset and CM0 fallback..." >&2
+  kill "$openocd_pid" 2>/dev/null || true
+  wait "$openocd_pid" 2>/dev/null || true
+  timeout 10 {{vars.openocd}} -s {{vars.openocd_scripts}} -f interface/cmsis-dap.cfg -c 'adapter speed 1000' -c 'set RESCUE 1' -f target/rp2350-riscv.cfg > /dev/null 2>&1 || true
+  {{vars.openocd}} -s {{vars.openocd_scripts}} -f interface/cmsis-dap.cfg -c 'adapter speed 1000' -c 'set USE_CORE { cm0 rv0 rv1 }' -f target/rp2350.cfg > {{vars.openocd_log}} 2>&1 &
+  openocd_pid=$!
+  sleep 2
+  set +e
+  cm0_output=$({{vars.gdb}} --batch --quiet --nx \
+    -ex 'set architecture arm' \
+    -ex 'target remote :3333' \
+    -ex 'monitor halt' \
+    -ex 'load {{vars.elf}}' \
+    -ex 'monitor reset run' 2>&1)
+  cm0_status=$?
+  set -e
+  printf '%s\n' "$cm0_output"
+  if ! printf '%s\n' "$cm0_output" | grep -Fq 'Loading section .text'; then
+    echo "CM0 fallback flash failed." >&2
+    exit 1
+  fi
+  kill "$openocd_pid" 2>/dev/null || true
+  wait "$openocd_pid" 2>/dev/null || true
+  echo "Firmware flashed through CM0. Verifying through RISC-V SWD..." >&2
+  {{vars.openocd}} -s {{vars.openocd_scripts}} -f interface/cmsis-dap.cfg -c 'adapter speed 1000' -f target/rp2350-riscv.cfg > {{vars.openocd_log}} 2>&1 &
+  openocd_pid=$!
+  sleep 2
+  if grep -Fq '[rp2350.rv0] unavailable' {{vars.openocd_log}} || grep -F '[rp2350.rv0]' {{vars.openocd_log}} | grep -Eq 'Examination failed|failed to halt|Failed to read|Target not examined'; then
+    echo "RISC-V core 0 could not be examined over SWD after CM0 fallback. Hold BOOTSEL while connecting the Pico, then rerun mise run flash." >&2
+    exit 1
+  fi
 fi
 set +e
 gdb_output=$({{vars.gdb}} --batch --quiet --nx {{vars.elf}} \
@@ -120,7 +146,9 @@ fi
 if ! printf '%s\n' "$gdb_output" | grep -F 'Section .text,' | grep -Fq ': matched.'; then
   exit "$gdb_status"
 fi
-if printf '%s\n' "$gdb_output" | grep -Eq 'MIS-MATCHED|FAILED'; then
+# .data has VMA in RAM and LMA in flash; compare-sections checks the VMA
+# where startup has not copied data yet, so MIS-MATCH is expected.
+if printf '%s\n' "$gdb_output" | grep -F 'Section' | grep -Fv '.data' | grep -Eq 'MIS-MATCHED|FAILED'; then
   exit 1
 fi
 if test "$gdb_status" -ne 0; then
@@ -139,7 +167,7 @@ mkdir -p {{vars.build_dir}}
 openocd_pid=$!
 trap 'kill "$openocd_pid" 2>/dev/null || true; wait "$openocd_pid" 2>/dev/null || true' EXIT
 sleep 1
-{{vars.gdb}} {{vars.elf}} -ex 'set architecture riscv:rv32' -ex 'target extended-remote :3333' -ex 'monitor halt' -ex 'layout src' -ex 'layout regs'
+{{vars.gdb}} {{vars.elf}} -ex 'set architecture riscv:rv32' -ex 'target remote :3333' -ex 'monitor halt' -ex 'layout src' -ex 'layout regs'
 reset
 """
 
@@ -167,3 +195,12 @@ run = "{{vars.objdump}} -d -S {{vars.elf}} > {{vars.disassembly}}"
 [tasks.clean]
 description = "Remove generated build artifacts"
 run = "rm -rf {{vars.build_dir}}"
+
+[tasks.assets]
+description = "Convert PNG textures in assets/ to RGB565 binary files for .incbin"
+sources = ["assets/*.png", "tools/png2rgb565.py"]
+outputs = ["{{vars.build_dir}}/assets/assets.h"]
+run = """
+mkdir -p {{vars.build_dir}}/assets
+python3 tools/png2rgb565.py assets {{vars.build_dir}}/assets
+"""

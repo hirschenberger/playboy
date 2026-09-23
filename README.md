@@ -64,8 +64,10 @@ The resulting files are:
 `mise run flash` builds the image and prefers Boot ROM programming when the
 Pico is in BOOTSEL mode. It writes the UF2 and selects the RISC-V CPU in that
 case. Otherwise it uses SWD to program and verify the ELF. Its OpenOCD log is
-written to `build/openocd.log`. If the board was last booted as ARM, enter
-BOOTSEL mode and run `mise run flash`; the task will switch it back to RISC-V.
+written to `build/openocd.log`. If the RISC-V cores cannot be examined (stuck
+or in ARM mode), the task automatically falls back to flashing through the
+Cortex-M33 core and then retries RISC-V verification. If the fallback also
+fails, enter BOOTSEL mode and run `mise run flash`.
 
 To start an interactive GDB session over SWD:
 
