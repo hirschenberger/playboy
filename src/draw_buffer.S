@@ -2,10 +2,11 @@
 
 .global fill_rect, lcd_clear, flip_buffer
 .global draw_rainbow_string, draw_rainbow_char, draw_string, draw_char
-.global rainbow_colors, rainbow_colors_end
+.global rainbow_colors, rainbow_colors_end, draw_buffer_ptr
 
 .section .text
 .align 2
+
 
 # ------------------------------------------------------------------------------
 # Fill an axis-aligned rectangle in the framebuffer with a solid color.
@@ -28,7 +29,7 @@
 #   * t4: RGB565 color in little-endian halfword order
 #   * t5: byte gap to skip at the end of each row
 fill_rect:
-        la  t0, .Ldraw_buffer
+        la  t0, draw_buffer_ptr
         li  t1, SCREEN_WIDTH
         mul t1, t1, a1            # y * SCREEN_WIDTH
         add t1, t1, a0            # + x
@@ -405,7 +406,7 @@ flip_buffer:
         addi sp, sp, -16
         sw ra, 12(sp)
 
-        la a0, .Ldraw_buffer
+        la a0, draw_buffer_ptr
         li a1, BUFFER_BYTES
         call draw_buffer
 
@@ -473,5 +474,5 @@ rainbow_colors_end:
 # ------------------------------------------------------------------------------
 .section .bss
 .align 2
-.Ldraw_buffer:
+draw_buffer_ptr:
         .space BUFFER_BYTES

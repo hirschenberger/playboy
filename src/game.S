@@ -1,6 +1,7 @@
-#include "macros.h"
-#include "math.h"
-#include "lcd.h"
+.include "macros.h"
+.include "math.h"
+.include "lcd.h"
+.include "assets/assets.h"
 
 .global gameloop
 .extern fp_div
@@ -101,19 +102,17 @@ render_frame:
         li s0, 0
 
         # draw roof and floor
-        li a0, 0
-        li a1, 0
-        li a2, SCREEN_WIDTH
-        li a3, SCREEN_HEIGHT / 2
-        li a4, ROOF_COLOR
-        call fill_rect
 
-        li a0, 0
-        li a1, SCREEN_HEIGHT / 2
-        li a2, SCREEN_WIDTH
-        li a3, SCREEN_HEIGHT / 2
-        li a4, FLOOR_COLOR
-        call fill_rect
+        la a0, wood_texture
+        la a1, greystone_texture
+        call draw_ceil_and_floor
+
+        # li a0, 0
+        # li a1, SCREEN_HEIGHT / 2
+        # li a2, SCREEN_WIDTH
+        # li a3, SCREEN_HEIGHT / 2
+        # li a4, FLOOR_COLOR
+        # call fill_rect
 
 .Lrender_column_loop:
         # camera_x = 2 * x / (SCREEN_WIDTH - 1) - 1.0
@@ -318,6 +317,146 @@ render_frame:
         ret
 
 # ------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------
+# Draw textured ceiling and floor.
+#
+# In:
+#   * a0: ceiling texture address
+#   * a1: floor texture address
+#
+# Register map:
+#   * s0: rayDirX0 (Q16.16)
+#   * s1: rayDirY0 (Q16.16)
+#   * s2: rayDirX1 (Q16.16)
+#   * s3: rayDirY1 (Q16.16)
+#   * s4: screen x (integer)
+#   * s5: screen y (integer)
+#   * s6: floorStepX (Q16.16)
+#   * s7: floorStepY (Q16.16)
+#   * s8: floorX (Q16.16)
+#   * s9: floorY (Q16.16)
+#   * s10: rowDistance (Q16.16)
+#   * s11: texture base address
+#   * t0: texture width (integer)
+#   * t1: texture height (integer)
+#   * t2: fractional mask (0xffff)
+#   * t3-t6: scratch
+draw_ceil_and_floor:
+    addi sp, sp, -64
+    sw ra, 60(sp)
+    sw s0, 56(sp)
+    sw s1, 52(sp)
+    sw s2, 48(sp)
+    sw s3, 44(sp)
+    sw s4, 40(sp)
+    sw s5, 36(sp)
+    sw s6, 32(sp)
+    sw s7, 28(sp)
+    sw s8, 24(sp)
+    sw s9, 20(sp)
+    sw s10, 16(sp)
+    sw s11, 12(sp)
+
+    LOAD_WORD t3, player_dir_x
+    LOAD_WORD t4, player_dir_y
+    LOAD_WORD t5, plane_x
+    LOAD_WORD t6, plane_y
+
+    sub s0, t3, t5           # rayDirX0 = dirX - planeX
+    sub s1, t4, t6           # rayDirY0 = dirY - planeY
+    add s2, t3, t5           # rayDirX1 = dirX + planeX
+    add s3, t4, t6           # rayDirY1 = dirY + planeY
+
+    li t0, ASSET_WOOD_WIDTH
+    li t1, ASSET_WOOD_HEIGHT
+    li t2, 0xffff            # fractional mask
+
+    li s5, SCREEN_HEIGHT - 1 # y counter (top to bottom)
+
+next_y:
+    addi t3, s5, -(SCREEN_HEIGHT / 2)   # t3 = y - SCREEN_HEIGHT / 2
+    beqz t3, .Lnext_y_continue          # skip horizon row (avoid div by zero)
+
+    li t4, SCREEN_HEIGHT / 2
+    FP_FROM_INT t4
+    div s10, t4, t3                     # rowDistance = (H/2 << 16) / (y - H/2)
+
+    sub t3, s2, s0
+    FP_MUL_Q16 t4, t3, s10, t6          # rowDistance * (rayDirX1 - rayDirX0)
+    li t5, SCREEN_WIDTH
+    div s6, t4, t5                      # floorStepX = rowDistance * (rayDirX1 - rayDirX0) / W
+
+    sub t3, s3, s1
+    FP_MUL_Q16 t4, t3, s10, t6          # rowDistance * (rayDirY1 - rayDirY0)
+    div s7, t4, t5                      # floorStepY = rowDistance * (rayDirY1 - rayDirY0) / W
+
+    FP_MUL_Q16 s8, s10, s0, t6          # floorX = rowDistance * rayDirX0
+    FP_MUL_Q16 s9, s10, s1, t6          # floorY = rowDistance * rayDirY0
+
+    # ceiling (y < H/2) samples a0, floor samples a1
+    li s4, 0                            # x counter (left to right)
+    li t4, SCREEN_HEIGHT / 2
+    blt s5, t4, .Luse_ceil
+    mv s11, a1
+    j .Lx_loop
+.Luse_ceil:
+    mv s11, a0
+.Lx_loop:
+    and t3, s8, t2                      # fracX = floorX & 0xffff
+    mul t3, t3, t0                      # fracX * texWidth
+    srai t3, t3, 16                     # tx = int(fracX * texWidth)
+    andi t3, t3, 63                     # tx &= (texWidth - 1)
+
+    and t4, s9, t2                      # fracY = floorY & 0xffff
+    mul t4, t4, t1                      # fracY * texHeight
+    srai t4, t4, 16                     # ty = int(fracY * texHeight)
+    andi t4, t4, 63                     # ty &= (texHeight - 1)
+
+    add s8, s8, s6                      # floorX += floorStepX
+    add s9, s9, s7                      # floorY += floorStepY
+
+    mul t4, t4, t0                      # ty * texWidth
+    add t4, t4, t3                      # + tx
+    slli t4, t4, 1                      # * 2 bytes/pixel
+    add t4, t4, s11                     # + texture base
+    lhu t4, 0(t4)                       # tex pixel color (RGB565, little-endian)
+    rev8 t4, t4                         # byte-swap to big-endian (display order)
+    srli t4, t4, 16
+
+    la t5, draw_buffer_ptr
+    li t6, SCREEN_WIDTH
+    mul t6, t6, s5                      # y * SCREEN_WIDTH
+    add t6, t6, s4                      # + x
+    slli t6, t6, 1                      # * 2 bytes/pixel
+    add t6, t6, t5
+    sh t4, 0(t6)                        # write RGB565 pixel
+
+    addi s4, s4, 1
+    li t4, SCREEN_WIDTH
+    blt s4, t4, .Lx_loop
+
+.Lnext_y_continue:
+    addi s5, s5, -1
+    bgez s5, next_y
+
+    lw ra, 60(sp)
+    lw s0, 56(sp)
+    lw s1, 52(sp)
+    lw s2, 48(sp)
+    lw s3, 44(sp)
+    lw s4, 40(sp)
+    lw s5, 36(sp)
+    lw s6, 32(sp)
+    lw s7, 28(sp)
+    lw s8, 24(sp)
+    lw s9, 20(sp)
+    lw s10, 16(sp)
+    lw s11, 12(sp)
+    addi sp, sp, 64
+    ret
+
+
+# ------------------------------------------------------------------------------
 # Record the start of the current frame's time window.
 set_frame_start:
         addi sp, sp, -16
@@ -430,3 +569,8 @@ level1:
 .if (. - level1) != MAP_WIDTH * MAP_HEIGHT
         .error "Incorrectly sized level map"
 .endif
+
+greystone_texture:
+    .incbin "assets/greystone.bin"
+wood_texture:
+    .incbin "assets/wood.bin"

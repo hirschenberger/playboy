@@ -8,6 +8,7 @@ gdb = "gdb-multiarch"
 openocd_dir = ".tools/openocd-rp2350"
 openocd = "{{vars.openocd_dir}}/src/openocd"
 openocd_scripts = "{{vars.openocd_dir}}/tcl"
+png2rgb565 = "assets/png2rgb565.py"
 
 build_dir = "build"
 image_name = "playboy"
