@@ -68,7 +68,7 @@ read_input:
         STORE_WORD a1, player_rot, t0
         j .Ldone
 .Lmove_forward:
-        li a1, 1
+        li a1, FP_ONE
         STORE_WORD a1, player_move, t0
         j .Ldone
 .Lrotate_right:
@@ -76,7 +76,7 @@ read_input:
         STORE_WORD a1, player_rot, t0
         j .Ldone
 .Lmove_backward:
-        li a1, -1
+        li a1, -FP_ONE
         STORE_WORD a1, player_move, t0
         j .Ldone
 
@@ -100,7 +100,9 @@ game_update:
         LOAD_WORD t2 player_pos_x
         LOAD_WORD t3 player_pos_y
         LOAD_WORD t4 player_move
+        LOAD_WORD t6 move_speed
 
+        FP_MUL_FAST t4, t4, t6
         mul t5, t0, t4                # dir x * move
         add t2, t2, t5                # pos x += dir x
         mul t5, t1, t4                # dir y * move
@@ -588,13 +590,13 @@ frame_start_us: .space 4
 player_pos_x: .word 22 * FP_ONE
 player_pos_y: .word 6 * FP_ONE
 player_dir_x: .word -FP_ONE
-player_dir_y: .word 0
-player_rot:   .word 0
-player_move:  .word 0
-plane_x:      .word 0
+player_dir_y: .word FP_ZERO
+player_rot:   .word 0                # attention, it's a 16bit turn angle, no Q16.16
+player_move:  .word FP_ZERO
+plane_x:      .word FP_ZERO
 plane_y:      .word (66 * FP_ONE + 50) / 100
 rot_speed:    .word 100 * FP_ONE / 10000
-move_speed:   .word (30 * FP_ONE + 50) / 100
+move_speed:   .word (FP_ONE + 50000) / 100000
 
 # ------------------------------------------------------------------------------
 .section .rodata
