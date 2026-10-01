@@ -53,10 +53,20 @@
 .equ PADS_GPIO_BASE,      0x04
 .equ PADS_GPIO_STRIDE,    0x04
 .equ PADS_OUTPUT_4MA,     0x16
+.equ PADS_INPUT_4MA,      0x56   # PADS_OUTPUT_4MA | IE (bit 6): enables input buffer
 
+.equ SIO_GPIO_IN,         0x04
+.equ SIO_GPIO_OUT,        0x10
 .equ SIO_GPIO_OUT_SET,    0x18
 .equ SIO_GPIO_OUT_CLR,    0x20
+.equ SIO_GPIO_OE,         0x30
 .equ SIO_GPIO_OE_SET,     0x38
+.equ SIO_GPIO_OE_CLR,     0x40
+.equ SIO_FIFO_ST,         0x50
+.equ SIO_FIFO_WR,         0x54
+.equ SIO_FIFO_RD,         0x58
+.equ SIO_FIFO_ST_VLD,     0x01
+.equ SIO_FIFO_ST_RDY,     0x02
 
 .equ SPI_CR0,             0x00
 .equ SPI_CR1,             0x04
