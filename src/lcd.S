@@ -512,7 +512,7 @@ lcd_write_byte:
 
 # MADCTL: MX|MV|BGR. The BGR bit (0x08) is required: the ST7789VW panel
 # is wired BGR, so without it red and blue are swapped.
-st7789_madctl: .byte 0x68
+st7789_madctl: .byte 0xa8   # flip y, xchange row-col, RGB mode
 st7789_colmod: .byte 0x55
 st7789_b2:     .byte 0x0c, 0x0c, 0x00, 0x33, 0x33
 st7789_b7:     .byte 0x35
