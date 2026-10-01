@@ -2,10 +2,11 @@
 
 .global itoa
 
+.equ ITOA_BUFFER_SIZE, 12
+
+# ------------------------------------------------------------------------------
 .section .text
 .align 2
-
-.equ ITOA_BUFFER_SIZE, 12
 
 # ------------------------------------------------------------------------------
 # Convert an integer to a NUL-terminated ASCII string.

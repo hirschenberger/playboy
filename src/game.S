@@ -1,21 +1,22 @@
 .include "macros.h"
 .include "math.h"
 .include "lcd.h"
+.include "joypad.h"
 .include "assets/assets.h"
 
 .global gameloop
-.extern fp_div
-
-.section .text
-.align 2
 
 .equ TARGET_FPS, 60
 .equ FRAME_TIME_US, 1000 * 1000 / TARGET_FPS
-
 .equ MAP_WIDTH, 32
 .equ MAP_HEIGHT, 32
 .equ FLOOR_COLOR, 0xd618
 .equ ROOF_COLOR, 0x5a08
+
+# ------------------------------------------------------------------------------
+.section .text
+.align 2
+
 
 # ------------------------------------------------------------------------------
 # Run the main game loop: handle input, update game state, render the
@@ -24,6 +25,7 @@ gameloop:
         LOG_STRING enter_gameloop_msg
         li a0, 0x0000
         call lcd_clear
+        call init_joypad
 
 .Lnext_frame:
         call set_frame_start
@@ -31,7 +33,6 @@ gameloop:
         call game_update
         call render_frame
         call wait_frame_time
-
         j .Lnext_frame
 
 
@@ -39,6 +40,50 @@ gameloop:
 # ------------------------------------------------------------------------------
 # Read and process player input for the current frame.
 read_input:
+        addi sp, sp, -16
+        sw ra, 12(sp)
+
+        call read_joypad
+        beqz a1, .Ldone
+
+
+        # check which button is pressed
+        andi t0, a0, JOYPAD_LEFT
+        bnez t0, .Lrotate_left
+        andi t0, a0, JOYPAD_TOP
+        bnez t0, .Lmove_forward
+        andi t0, a0, JOYPAD_RIGHT
+        bnez t0, .Lrotate_right
+        andi t0, a0, JOYPAD_BOTTOM
+        bnez t0, .Lmove_backward
+
+        # no button pressed, reset movement
+        STORE_WORD zero, player_rot, t0
+        STORE_WORD zero, player_move, t0
+        j .Ldone
+
+
+.Lrotate_left:
+        li a1, -1
+        STORE_WORD a1, player_rot, t0
+        j .Ldone
+.Lmove_forward:
+        li a1, 1
+        STORE_WORD a1, player_move, t0
+        j .Ldone
+.Lrotate_right:
+        li a1, 1
+        STORE_WORD a1, player_rot, t0
+        j .Ldone
+.Lmove_backward:
+        li a1, -1
+        STORE_WORD a1, player_move, t0
+        j .Ldone
+
+
+.Ldone:
+        lw ra, 12(sp)
+        addi sp, sp, 16
         ret
 
 # ------------------------------------------------------------------------------
@@ -46,22 +91,48 @@ read_input:
 game_update:
         addi sp, sp, -16
         sw ra, 12(sp)
+        sw s0, 8(sp)
+        sw s1, 4(sp)
 
-        LOAD_WORD a0 rot_speed
-        LOAD_WORD a1 player_dir_x
-        LOAD_WORD a2 player_dir_y
+        # move player
+        LOAD_WORD t0 player_dir_x
+        LOAD_WORD t1 player_dir_y
+        LOAD_WORD t2 player_pos_x
+        LOAD_WORD t3 player_pos_y
+        LOAD_WORD t4 player_move
+
+        mul t5, t0, t4                # dir x * move
+        add t2, t2, t5                # pos x += dir x
+        mul t5, t1, t4                # dir y * move
+        add t3, t3, t5                # pos y += dir y
+
+        STORE_WORD t2 player_pos_x t5
+        STORE_WORD t3 player_pos_y t5
+
+        # calculate rotation
+        LOAD_WORD s0 rot_speed
+        LOAD_WORD a0 player_rot
+        mul s0, s0, a0
+
+        # rotate player dir
+        mv a0, s0
+        mv a1, t0                    # player_dir_x
+        mv a2, t1                    # player_dir_y
         call rotate_vec              # a0=x', a1=y'
-        SAVE_WORD a0 player_dir_x t0
-        SAVE_WORD a1 player_dir_y t0
+        STORE_WORD a0 player_dir_x t0
+        STORE_WORD a1 player_dir_y t0
 
-        LOAD_WORD a0 rot_speed
+        # rotate render plane
+        mv a0, s0
         LOAD_WORD a1 plane_x
         LOAD_WORD a2 plane_y
         call rotate_vec              # a0=x', a1=y'
-        SAVE_WORD a0 plane_x t0
-        SAVE_WORD a1 plane_y t0
+        STORE_WORD a0 plane_x t0
+        STORE_WORD a1 plane_y t0
 
         lw ra, 12(sp)
+        lw s0, 8(sp)
+        sw s1, 4(sp)
         addi sp, sp, 16
         ret
 
@@ -464,7 +535,7 @@ set_frame_start:
 
         call timer0_read_us
 
-        SAVE_WORD a0 frame_start_us t0
+        STORE_WORD a0 frame_start_us t0
 
         lw ra, 12(sp)
         addi sp, sp, 16
@@ -518,10 +589,12 @@ player_pos_x: .word 22 * FP_ONE
 player_pos_y: .word 6 * FP_ONE
 player_dir_x: .word -FP_ONE
 player_dir_y: .word 0
+player_rot:   .word 0
+player_move:  .word 0
 plane_x:      .word 0
 plane_y:      .word (66 * FP_ONE + 50) / 100
-rot_speed:    .word 50 * FP_ONE / 10000
-move_speed:   .word (50 * FP_ONE + 50) / 100
+rot_speed:    .word 100 * FP_ONE / 10000
+move_speed:   .word (30 * FP_ONE + 50) / 100
 
 # ------------------------------------------------------------------------------
 .section .rodata
@@ -532,6 +605,9 @@ enter_gameloop_msg:
 
 framerate_delay_msg:
         .asciz "WARN: Framerate delay by micosecs:"
+
+joypad_press_msg:
+        .asciz "Joypad button pressed"
 
 level1:
         .byte 1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1

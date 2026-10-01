@@ -4,6 +4,7 @@
 .global draw_rainbow_string, draw_rainbow_char, draw_string, draw_char
 .global rainbow_colors, rainbow_colors_end, draw_buffer_ptr
 
+# ------------------------------------------------------------------------------
 .section .text
 .align 2
 

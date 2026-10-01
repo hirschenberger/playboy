@@ -5,6 +5,10 @@
 .extern timer0_init
 
 # ------------------------------------------------------------------------------
+.section .text
+.align 2
+
+# ------------------------------------------------------------------------------
 # Initialize the clock tree, TIMER0, UART0, LCD GPIO, SPI1, and the
 # ST7789VW panel, in that order.
 lcd_init:

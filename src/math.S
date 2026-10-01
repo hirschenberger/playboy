@@ -2,6 +2,7 @@
 
 .global fp_mul, fp_div, fp_clamp, sin_cos, rotate_vec
 
+# ------------------------------------------------------------------------------
 .section .text
 .align 2
 

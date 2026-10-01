@@ -2,7 +2,9 @@
 
 .global uart_init, uart_write_byte, uart_write_string
 
+# ------------------------------------------------------------------------------
 .section .text
+.align 2
 
 # ------------------------------------------------------------------------------
 # Configure UART0 at 115200 8-N-1. GP0 is the Pico TX pin connected to the

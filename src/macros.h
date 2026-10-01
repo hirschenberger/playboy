@@ -22,7 +22,17 @@
     lw \reg, 0(\reg)
 .endm
 
-.macro SAVE_WORD reg addr scratch
+.macro LOAD_BYTE reg addr
+    la \reg, \addr
+    lb \reg, 0(\reg)
+.endm
+
+.macro STORE_WORD reg addr scratch
     la \scratch, \addr
     sw \reg, 0(\scratch)
+.endm
+
+.macro STORE_BYTE reg addr scratch
+    la \scratch, \addr
+    sb \reg, 0(\scratch)
 .endm

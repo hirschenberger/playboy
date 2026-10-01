@@ -2,6 +2,7 @@
 
 .global timer0_init, timer0_read_us, delay_ms
 
+# ------------------------------------------------------------------------------
 .section .text
 .align 2
 

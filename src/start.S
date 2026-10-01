@@ -1,8 +1,10 @@
 .global _reset_handler, _trap_handler
 
+# ------------------------------------------------------------------------------
 .section .reset, "ax"             # Kept at the boot address by the linker script.
 .align 2                          # Instructions and word accesses require 4-byte alignment.
-.type _reset_handler, @function
+
+# ------------------------------------------------------------------------------
 _reset_handler:
         csrr t0, mhartid              # 0 = core 0, 1 = core 1.
         bnez t0, .Lcore1              # Core 1 parks on its own stack below.
