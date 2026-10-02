@@ -12,6 +12,12 @@
 .equ MAP_HEIGHT, 32
 .equ WALL_TEXTURE_WIDTH, ASSET_REDBRICK_WIDTH
 .equ WALL_TEXTURE_HEIGHT, ASSET_REDBRICK_HEIGHT
+.equ RENDER_HIT_RAY_DIR_X, 0
+.equ RENDER_HIT_RAY_DIR_Y, 4
+.equ RENDER_HIT_SIDE, 8
+.equ RENDER_HIT_DISTANCE, 12
+.equ RENDER_HIT_TEXTURE, 16
+.equ RENDER_HIT_SIZE, 20
 
 .if ASSET_MOSSY_WIDTH != WALL_TEXTURE_WIDTH || ASSET_MOSSY_HEIGHT != WALL_TEXTURE_HEIGHT
         .error "Wall textures must have identical dimensions"
@@ -139,334 +145,374 @@ game_update:
         ret
 
 # ------------------------------------------------------------------------------
-# Render the current frame: draw the roof and floor, then cast one ray per
-# screen column and draw the projected wall.
+# Render the current frame: draw the roof and floor, then render one wall ray
+# per screen column.
 #
 # Register map:
 #   * s0: screen column x (integer)
-#   * s1: side_dist_y (Q16.16)
-#   * s2: camera_x (Q16.16), then rendered column pixel count
-#   * s3: ray_dir_x (Q16.16)
-#   * s4: ray_dir_y (Q16.16)
-#   * s5: map_x (integer)
-#   * s6: map_y (integer)
-#   * s7: delta_dist_x (Q16.16)
-#   * s8: delta_dist_y (Q16.16)
-#   * s9: step_x (integer, -1 or +1)
-#   * s10: step_y (integer, -1 or +1)
-#   * s11: side_dist_x (Q16.16)
-#   * 0(sp): ray_dir_x (Q16.16)
-#   * 4(sp): ray_dir_y (Q16.16)
-#   * 8(sp): hit wall texture address
-#   * t0-t6, a0-a1: short-lived scratch and call arguments
+#   * 0(sp)-19(sp): wall-ray hit record
 render_frame:
-        addi sp, sp, -64
-        sw ra, 60(sp)
-        sw s0, 56(sp)
-        sw s1, 52(sp)
-        sw s2, 48(sp)
-        sw s3, 44(sp)
-        sw s4, 40(sp)
-        sw s5, 36(sp)
-        sw s6, 32(sp)
-        sw s7, 28(sp)
-        sw s8, 24(sp)
-        sw s9, 20(sp)
-        sw s10,16(sp)
-        sw s11, 12(sp)
+        addi sp, sp, -48
+        sw ra, 44(sp)
+        sw s0, 40(sp)
 
         li s0, 0
 
-        # draw roof and floor
         la a0, wood_texture
         la a1, greystone_texture
         call draw_ceil_and_floor
 
 .Lrender_column_loop:
+        mv a0, s0
+        mv a1, sp
+        call cast_wall_ray
+
+        mv a0, s0
+        mv a1, sp
+        call draw_textured_wall_column
+
+        addi s0, s0, 1
+        li t0, SCREEN_WIDTH
+        blt s0, t0, .Lrender_column_loop
+
+        lw ra, 44(sp)
+        lw s0, 40(sp)
+        addi sp, sp, 48
+        ret
+
+# ------------------------------------------------------------------------------
+# Cast one wall ray through the screen column and record its hit.
+#
+# In:
+#   * a0: screen column x (integer)
+#   * a1: address of a RENDER_HIT_SIZE-byte hit record
+#
+# Out:
+#   * RENDER_HIT_RAY_DIR_X(a1): ray direction x (Q16.16)
+#   * RENDER_HIT_RAY_DIR_Y(a1): ray direction y (Q16.16)
+#   * RENDER_HIT_SIDE(a1): hit side (0 for x-side, 1 for y-side)
+#   * RENDER_HIT_DISTANCE(a1): perpendicular wall distance (Q16.16)
+#   * RENDER_HIT_TEXTURE(a1): wall texture address
+#
+# Register map:
+#   * s0: hit record address
+#   * s1: ray_dir_x, then side_dist_x (Q16.16)
+#   * s2: ray_dir_y, then side_dist_y (Q16.16)
+#   * s3: map_x (integer)
+#   * s4: map_y (integer)
+#   * s5: delta_dist_x (Q16.16)
+#   * s6: delta_dist_y (Q16.16)
+#   * s7: step_x (integer, -1 or +1)
+#   * s8: step_y (integer, -1 or +1)
+#   * t6: level map address
+cast_wall_ray:
+        addi sp, sp, -48
+        sw ra, 44(sp)
+        sw s0, 40(sp)
+        sw s1, 36(sp)
+        sw s2, 32(sp)
+        sw s3, 28(sp)
+        sw s4, 24(sp)
+        sw s5, 20(sp)
+        sw s6, 16(sp)
+        sw s7, 12(sp)
+        sw s8, 8(sp)
+
+        mv s0, a1
+
         # camera_x = 2 * x / (SCREEN_WIDTH - 1) - 1.0
-        slli s2, s0, 1
-        slli s2, s2, FP_SHIFT
+        slli t1, a0, 1
+        slli t1, t1, FP_SHIFT
         li t0, SCREEN_WIDTH - 1
-        div s2, s2, t0
+        div t1, t1, t0
         li t0, -FP_ONE
-        add s2, s2, t0
+        add t1, t1, t0
 
         LOAD_WORD t0, plane_x
-        FP_MUL_Q16 t1, t0, s2, t2
-        LOAD_WORD s3, player_dir_x
-        add s3, s3, t1
+        FP_MUL_Q16 t2, t0, t1, t3
+        LOAD_WORD s1, player_dir_x
+        add s1, s1, t2
 
         LOAD_WORD t0, plane_y
-        FP_MUL_Q16 t1, t0, s2, t2
-        LOAD_WORD s4, player_dir_y
-        add s4, s4, t1
-        sw s3, 0(sp)
-        sw s4, 4(sp)
+        FP_MUL_Q16 t2, t0, t1, t3
+        LOAD_WORD s2, player_dir_y
+        add s2, s2, t2
+        sw s1, RENDER_HIT_RAY_DIR_X(s0)
+        sw s2, RENDER_HIT_RAY_DIR_Y(s0)
 
         LOAD_WORD t0, player_pos_x
-        FP_TO_INT s5, t0
+        FP_TO_INT s3, t0
 
         LOAD_WORD t0, player_pos_y
-        FP_TO_INT s6, t0
+        FP_TO_INT s4, t0
 
-        mv a0, s3
+        mv a0, s1
         FP_ABS a0
         li t0, 2
-        bgeu t0, a0, .Lray_dir_x_near_zero
+        bgeu t0, a0, .Lcast_ray_dir_x_near_zero
 
         li a0, FP_ONE
-        mv a1, s3
+        mv a1, s1
         call fp_div
         FP_ABS a0
-        mv s7, a0
-        j .Lhave_delta_dist_x
+        mv s5, a0
+        j .Lcast_have_delta_dist_x
 
-.Lray_dir_x_near_zero:
-        li s7, 0x7fffffff
-.Lhave_delta_dist_x:
+.Lcast_ray_dir_x_near_zero:
+        li s5, 0x7fffffff
+.Lcast_have_delta_dist_x:
 
-        mv a0, s4
+        mv a0, s2
         FP_ABS a0
         li t0, 2
-        bgeu t0, a0, .Lray_dir_y_near_zero
+        bgeu t0, a0, .Lcast_ray_dir_y_near_zero
 
         li a0, FP_ONE
-        mv a1, s4
+        mv a1, s2
         call fp_div
         FP_ABS a0
-        mv s8, a0
-        j .Lhave_delta_dist_y
+        mv s6, a0
+        j .Lcast_have_delta_dist_y
 
-.Lray_dir_y_near_zero:
-        li s8, 0x7fffffff
-.Lhave_delta_dist_y:
+.Lcast_ray_dir_y_near_zero:
+        li s6, 0x7fffffff
+.Lcast_have_delta_dist_y:
 
         LOAD_WORD t0, player_pos_x
-        bgez s3, .Lray_dir_x_positive
+        bgez s1, .Lcast_ray_dir_x_positive
 
-        li s9, -1
-        slli t1, s5, FP_SHIFT
+        li s7, -1
+        slli t1, s3, FP_SHIFT
         sub t0, t0, t1
-        j .Lhave_side_dist_x_base
+        j .Lcast_have_side_dist_x_base
 
-.Lray_dir_x_positive:
-        li s9, 1
-        addi t1, s5, 1
+.Lcast_ray_dir_x_positive:
+        li s7, 1
+        addi t1, s3, 1
         slli t1, t1, FP_SHIFT
         sub t0, t1, t0
 
-.Lhave_side_dist_x_base:
-        FP_MUL_Q16 s11, t0, s7, t1
+.Lcast_have_side_dist_x_base:
+        FP_MUL_Q16 s1, t0, s5, t1
 
         LOAD_WORD t0, player_pos_y
-        bgez s4, .Lray_dir_y_positive
+        bgez s2, .Lcast_ray_dir_y_positive
 
-        li s10, -1
-        slli t1, s6, FP_SHIFT
+        li s8, -1
+        slli t1, s4, FP_SHIFT
         sub t0, t0, t1
-        j .Lhave_side_dist_y_base
+        j .Lcast_have_side_dist_y_base
 
-.Lray_dir_y_positive:
-        li s10, 1
-        addi t1, s6, 1
+.Lcast_ray_dir_y_positive:
+        li s8, 1
+        addi t1, s4, 1
         slli t1, t1, FP_SHIFT
         sub t0, t1, t0
 
-.Lhave_side_dist_y_base:
-        FP_MUL_Q16 s1, t0, s8, t1
+.Lcast_have_side_dist_y_base:
+        FP_MUL_Q16 s2, t0, s6, t1
 
-        # s4 (ray_dir_y) is no longer needed; reuse it for the level map base
-        # address to avoid reloading it inside the DDA loop.
-        la s4, level1
+        la t6, level1
         la t0, redbrick_texture
-        sw t0, 8(sp)
+        sw t0, RENDER_HIT_TEXTURE(s0)
 
-        # DDA and wall projection will consume the s-register state above.
+.Lcast_dda_loop:
+        bge s1, s2, .Lcast_step_y
 
-        # a0: hit side
-.Ldda_loop:
-        bge s11, s1, .Lstep_y
-
-        add s11, s11, s7
-        add s5, s5, s9
+        add s1, s1, s5
+        add s3, s3, s7
         li a0, 0
-        j .Lcheck_wall
+        j .Lcast_check_wall
 
-.Lstep_y:
-        add s1, s1, s8
-        add s6, s6, s10
+.Lcast_step_y:
+        add s2, s2, s6
+        add s4, s4, s8
         li a0, 1
 
-.Lcheck_wall:
-        # check ray wall hit
+.Lcast_check_wall:
         li t0, MAP_WIDTH
-        bgeu s5, t0, .Lwall_hit
+        bgeu s3, t0, .Lcast_wall_hit
         li t1, MAP_HEIGHT
-        bgeu s6, t1, .Lwall_hit
+        bgeu s4, t1, .Lcast_wall_hit
 
-        mul t0, s6, t0              # y * width
-        add t0, t0, s5              # + x
+        mul t0, s4, t0
+        add t0, t0, s3
 
-        add t1, s4, t0              # advance to calculated map pos
-        lb t0, 0(t1)                # map entry
-        beqz t0, .Ldda_loop
+        add t1, t6, t0
+        lb t0, 0(t1)
+        beqz t0, .Lcast_dda_loop
 
-        # Find the texture selected by this map entry.
         la t1, level1_texture_map
         sh2add t1, t0, t1
         lw t1, 0(t1)
-        sw t1, 8(sp)
+        sw t1, RENDER_HIT_TEXTURE(s0)
 
-.Lwall_hit:
-        # ------------------------------------------------------------------------------
-        # distance projected on camera direction
-        li t0, FP_ZERO             # perpWallDist
-        beqz a0, .Lwall_x
+.Lcast_wall_hit:
+        beqz a0, .Lcast_wall_x
 
-        sub t0, s1, s8
-        j .Lhave_wall_distance
-.Lwall_x:
-        sub t0, s11, s7
-.Lhave_wall_distance:
+        sub t0, s2, s6
+        j .Lcast_have_wall_distance
 
-        mv s3, a0                   # store wall hit side
-        mv s7, t0                   # preserve perpendicular wall distance
+.Lcast_wall_x:
+        sub t0, s1, s5
 
-        # ------------------------------------------------------------------------------
-        # Height of line
+.Lcast_have_wall_distance:
+        sw a0, RENDER_HIT_SIDE(s0)
+        sw t0, RENDER_HIT_DISTANCE(s0)
+
+        lw ra, 44(sp)
+        lw s0, 40(sp)
+        lw s1, 36(sp)
+        lw s2, 32(sp)
+        lw s3, 28(sp)
+        lw s4, 24(sp)
+        lw s5, 20(sp)
+        lw s6, 16(sp)
+        lw s7, 12(sp)
+        lw s8, 8(sp)
+        addi sp, sp, 48
+        ret
+
+# ------------------------------------------------------------------------------
+# Draw one textured wall column from a recorded ray hit.
+#
+# In:
+#   * a0: screen column x (integer)
+#   * a1: address of a populated wall-ray hit record
+#
+# Register map:
+#   * s0: screen column x (integer)
+#   * s1: hit record address
+#   * a2: clipped draw start y
+#   * a3: clipped draw end y
+#   * a4: hit side
+#   * a5: perpendicular wall distance (Q16.16)
+#   * a6: texture x
+#   * a7: texture y step (Q16.16)
+#   * t0: texture y position (Q16.16)
+#   * t1: framebuffer pixel address
+#   * t2: texture address
+#   * t3: current screen y
+#   * t4-t6: scratch
+draw_textured_wall_column:
+        addi sp, sp, -16
+        sw ra, 12(sp)
+        sw s0, 8(sp)
+        sw s1, 4(sp)
+
+        mv s0, a0
+        mv s1, a1
+        lw t0, RENDER_HIT_DISTANCE(s1)
+
         li t1, 512                  # 1/128 in Q16.16
-        ble t0, t1, .Lfull_height_column
+        ble t0, t1, .Ldraw_full_height_column
 
         li a0, SCREEN_HEIGHT
         slli a0, a0, FP_SHIFT
         mv a1, t0
         call fp_div
-        FP_TO_INT s8, a0             # projected line height
+        FP_TO_INT t0, a0
 
-        li t2, SCREEN_HEIGHT / 2
-        srli t3, s8, 1               # projected half-height
-        sub t4, t2, t3
-        max t4, t4, zero             # line start >= 0
+        li t1, SCREEN_HEIGHT / 2
+        srli t0, t0, 1
+        sub a2, t1, t0
+        max a2, a2, zero
 
-        add t5, t2, t3
-        addi t6, zero, SCREEN_HEIGHT - 1
-        min t5, t5, t6               # line end < screen height
+        add a3, t1, t0
+        li t2, SCREEN_HEIGHT - 1
+        min a3, a3, t2
+        j .Ldraw_have_column_span
 
-        sub s2, t5, t4
-        addi s2, s2, 1               # inclusive window pixel count
-        j .Ldraw_wall_column
+.Ldraw_full_height_column:
+        li a2, 0
+        li a3, SCREEN_HEIGHT - 1
 
-.Lfull_height_column:
-        li t4, 0
-        li t5, SCREEN_HEIGHT - 1
+.Ldraw_have_column_span:
+        lw a4, RENDER_HIT_SIDE(s1)
+        lw a5, RENDER_HIT_DISTANCE(s1)
 
-        # ------------------------------------------------------------------------------
-        # Map the wall hit position to a texture column. For an x-side hit,
-        # use the fractional y coordinate; for a y-side hit, use fractional x.
-.Ldraw_wall_column:
-        mv s1, t4                   # clipped draw start
-        mv s2, t5                   # clipped draw end
+        bnez a4, .Ldraw_wall_hit_y_side
+        lw t0, RENDER_HIT_RAY_DIR_Y(s1)
+        FP_MUL_Q16 a6, a5, t0, t1
+        LOAD_WORD t1, player_pos_y
+        add a6, a6, t1
+        j .Ldraw_have_wall_x
 
-        bnez s3, .Lwall_hit_y_side
-        lw t0, 4(sp)                # ray_dir_y
-        FP_MUL_Q16 t1, s7, t0, t2
-        LOAD_WORD t2, player_pos_y
-        add t1, t1, t2
-        j .Lhave_wall_x
+.Ldraw_wall_hit_y_side:
+        lw t0, RENDER_HIT_RAY_DIR_X(s1)
+        FP_MUL_Q16 a6, a5, t0, t1
+        LOAD_WORD t1, player_pos_x
+        add a6, a6, t1
 
-.Lwall_hit_y_side:
-        lw t0, 0(sp)                # ray_dir_x
-        FP_MUL_Q16 t1, s7, t0, t2
-        LOAD_WORD t2, player_pos_x
-        add t1, t1, t2
-
-.Lhave_wall_x:
+.Ldraw_have_wall_x:
         li t0, 0xffff
-        and t1, t1, t0              # fractional wall coordinate
+        and a6, a6, t0
         li t0, WALL_TEXTURE_WIDTH
-        mul t1, t1, t0
-        srli s4, t1, FP_SHIFT        # texture x
+        mul a6, a6, t0
+        srli a6, a6, FP_SHIFT
 
-        # Flip opposite faces so texture orientation remains consistent.
-        bnez s3, .Lcheck_y_side_flip
-        lw t0, 0(sp)
-        blez t0, .Lhave_texture_x
-        j .Lflip_texture_x
+        bnez a4, .Ldraw_check_y_side_flip
+        lw t0, RENDER_HIT_RAY_DIR_X(s1)
+        blez t0, .Ldraw_have_texture_x
+        j .Ldraw_flip_texture_x
 
-.Lcheck_y_side_flip:
-        lw t0, 4(sp)
-        bgez t0, .Lhave_texture_x
+.Ldraw_check_y_side_flip:
+        lw t0, RENDER_HIT_RAY_DIR_Y(s1)
+        bgez t0, .Ldraw_have_texture_x
 
-.Lflip_texture_x:
+.Ldraw_flip_texture_x:
         li t0, WALL_TEXTURE_WIDTH - 1
-        sub s4, t0, s4
+        sub a6, t0, a6
 
-.Lhave_texture_x:
-        # texture_step = texture_height / projected_height. Derive it from the
-        # wall distance to avoid overflowing projected_height for nearby walls.
+.Ldraw_have_texture_x:
         li t0, WALL_TEXTURE_HEIGHT
-        mul t0, s7, t0
+        mul t0, a5, t0
         li t1, SCREEN_HEIGHT
-        div s6, t0, t1              # Q16.16 texture step per screen row
+        div a7, t0, t1
 
         li t0, SCREEN_HEIGHT / 2
-        sub t0, s1, t0
-        mul s9, t0, s6
+        sub t0, a2, t0
+        mul t0, t0, a7
         li t1, WALL_TEXTURE_HEIGHT / 2
         slli t1, t1, FP_SHIFT
-        add s9, s9, t1              # initial Q16.16 texture position
+        add t0, t0, t1
 
-        la s10, draw_buffer_ptr
-        li t0, SCREEN_WIDTH
-        mul t0, s1, t0
-        add t0, t0, s0
-        sh1add s10, t0, s10         # first framebuffer pixel in column
+        la t1, draw_buffer_ptr
+        li t4, SCREEN_WIDTH
+        mul t4, a2, t4
+        add t4, t4, s0
+        sh1add t1, t4, t1
 
-        lw s11, 8(sp)
-        mv s5, s1
+        lw t2, RENDER_HIT_TEXTURE(s1)
+        mv t3, a2
 
-.Ldraw_wall_pixel:
-        srai t0, s9, FP_SHIFT
-        andi t0, t0, WALL_TEXTURE_HEIGHT - 1
-        li t1, WALL_TEXTURE_WIDTH
-        mul t0, t0, t1
-        add t0, t0, s4
-        sh1add t0, t0, s11
-        lhu t0, 0(t0)
-        srl t0, t0, s3
-        beqz s3, .Lstore_wall_pixel
-        li t1, 0x7bef
-        and t0, t0, t1              # darken without bleeding across RGB fields
+.Ldraw_textured_wall_pixel:
+        srai t4, t0, FP_SHIFT
+        andi t4, t4, WALL_TEXTURE_HEIGHT - 1
+        li t5, WALL_TEXTURE_WIDTH
+        mul t4, t4, t5
+        add t4, t4, a6
+        sh1add t4, t4, t2
+        lhu t4, 0(t4)
+        srl t4, t4, a4
+        beqz a4, .Ldraw_store_wall_pixel
+        li t5, 0x7bef
+        and t4, t4, t5
 
-.Lstore_wall_pixel:
-        rev8 t0, t0
-        srli t0, t0, 16
-        sh t0, 0(s10)
+.Ldraw_store_wall_pixel:
+        rev8 t4, t4
+        srli t4, t4, 16
+        sh t4, 0(t1)
 
-        add s9, s9, s6
-        addi s5, s5, 1
-        addi s10, s10, SCREEN_WIDTH * 2
-        ble s5, s2, .Ldraw_wall_pixel
+        add t0, t0, a7
+        addi t3, t3, 1
+        addi t1, t1, SCREEN_WIDTH * 2
+        ble t3, a3, .Ldraw_textured_wall_pixel
 
-        # next x pos
-        addi s0, s0, 1
-        li t0, SCREEN_WIDTH
-        blt s0, t0, .Lrender_column_loop
-
-        lw ra, 60(sp)
-        lw s0, 56(sp)
-        lw s1, 52(sp)
-        lw s2, 48(sp)
-        lw s3, 44(sp)
-        lw s4, 40(sp)
-        lw s5, 36(sp)
-        lw s6, 32(sp)
-        lw s7, 28(sp)
-        lw s8, 24(sp)
-        lw s9, 20(sp)
-        lw s10,16(sp)
-        lw s11, 12(sp)
-        addi sp, sp, 64
+        lw ra, 12(sp)
+        lw s0, 8(sp)
+        lw s1, 4(sp)
+        addi sp, sp, 16
         ret
 
 # ------------------------------------------------------------------------------
