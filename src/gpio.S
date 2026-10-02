@@ -120,8 +120,7 @@ gpio_set_input:
 #   * t1: GPIO_CTRL address for GPIO n
 gpio_set_function:
         li t0, IO_BANK0_BASE
-        slli t1, a0, 3              # each GPIO_CTRL is 8 bytes apart
-        add t1, t1, t0
+        sh3add t1, a0, t0           # each GPIO_CTRL is 8 bytes apart
         addi t1, t1, GPIO_CTRL_BASE
         sw a1, 0(t1)                # select the pad function
         ret
@@ -143,8 +142,7 @@ gpio_set_function:
 #   * t1: pad control address for GPIO n
 gpio_set_pad:
         li t0, PADS_BANK0_BASE
-        slli t1, a0, 2              # each pad control is 4 bytes apart
-        add t1, t1, t0
+        sh2add t1, a0, t0           # each pad control is 4 bytes apart
         addi t1, t1, PADS_GPIO_BASE
         sw a1, 0(t1)                # de-isolate and configure the pad
         ret

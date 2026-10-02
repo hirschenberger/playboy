@@ -34,8 +34,7 @@ fill_rect:
         li  t1, SCREEN_WIDTH
         mul t1, t1, a1            # y * SCREEN_WIDTH
         add t1, t1, a0            # + x
-        slli t1, t1, 1            # * 2 bytes/pixel
-        add t0, t0, t1            # t0 = address of first pixel
+        sh1add t0, t1, t0         # t0 = address of first pixel
 
         rev8 t4, a4               # convert RGB565 to little-endian
         srli t4, t4, 16

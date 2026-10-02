@@ -175,16 +175,14 @@ lcd_gpio_init:
         li t1, PADS_OUTPUT_4MA
         li t2, 8
 0:
-        slli t3, t2, 2
-        add t3, t3, t0
+        sh2add t3, t2, t0
         addi t3, t3, PADS_GPIO_BASE
         sw t1, 0(t3)                  # remove pad isolation, use 3.3 V defaults
         addi t2, t2, 1
         li t4, 17
         blt t2, t4, 0b
         li t2, SD_CS_PIN
-        slli t3, t2, 2
-        add t3, t3, t0
+        sh2add t3, t2, t0
         addi t3, t3, PADS_GPIO_BASE
         sw t1, 0(t3)
 
@@ -192,24 +190,21 @@ lcd_gpio_init:
         li t1, GPIO_FUNC_SIO
         li t2, LCD_DC_PIN
 0:
-        slli t3, t2, 3
-        add t3, t3, t0
+        sh3add t3, t2, t0
         addi t3, t3, GPIO_CTRL_BASE
         sw t1, 0(t3)
         addi t2, t2, 1
         li t4, 17
         blt t2, t4, 0b
         li t2, SD_CS_PIN
-        slli t3, t2, 3
-        add t3, t3, t0
+        sh3add t3, t2, t0
         addi t3, t3, GPIO_CTRL_BASE
         sw t1, 0(t3)
 
         li t1, GPIO_FUNC_SPI1
         li t2, LCD_SCK_PIN
 1:
-        slli t3, t2, 3
-        add t3, t3, t0
+        sh3add t3, t2, t0
         addi t3, t3, GPIO_CTRL_BASE
         sw t1, 0(t3)
         addi t2, t2, 1
@@ -333,8 +328,7 @@ spi1_init:
 # Run the vendor initialization sequence for the 320x240 ST7789VW panel.
 st7789_init:
         addi sp, sp, -16
-        .equ ST7789_INIT_RA, 12
-        sw ra, ST7789_INIT_RA(sp)
+        sw ra, 12(sp)
 
         li t0, SIO_BASE
         li t1, LCD_RST_MASK
@@ -425,7 +419,7 @@ st7789_init:
         li t1, LCD_BL_MASK
         sw t1, SIO_GPIO_OUT_SET(t0)
 
-        lw ra, ST7789_INIT_RA(sp)
+        lw ra, 12(sp)
         addi sp, sp, 16
         ret
 

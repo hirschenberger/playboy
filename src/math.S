@@ -317,9 +317,8 @@ sin_cos:
 
 .L_cos_load:
 
-        slli    t3, t1, 2
         la      t4, sin_lut
-        add     t4, t4, t3
+        sh2add  t4, t1, t4
         lw      t5, 0(t4)
 
         li      t6, 1
