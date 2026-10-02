@@ -2,7 +2,6 @@
 .include "math.h"
 .include "lcd.h"
 .include "joypad.h"
-.include "assets/assets.h"
 
 .global gameloop
 
@@ -10,18 +9,14 @@
 .equ FRAME_TIME_US, 1000 * 1000 / TARGET_FPS
 .equ MAP_WIDTH, 32
 .equ MAP_HEIGHT, 32
-.equ WALL_TEXTURE_WIDTH, ASSET_REDBRICK_WIDTH
-.equ WALL_TEXTURE_HEIGHT, ASSET_REDBRICK_HEIGHT
+.equ TEXTURE_WIDTH, 64
+.equ TEXTURE_HEIGHT, 64
 .equ RENDER_HIT_RAY_DIR_X, 0
 .equ RENDER_HIT_RAY_DIR_Y, 4
 .equ RENDER_HIT_SIDE, 8
 .equ RENDER_HIT_DISTANCE, 12
 .equ RENDER_HIT_TEXTURE, 16
 .equ RENDER_HIT_SIZE, 20
-
-.if ASSET_MOSSY_WIDTH != WALL_TEXTURE_WIDTH || ASSET_MOSSY_HEIGHT != WALL_TEXTURE_HEIGHT
-        .error "Wall textures must have identical dimensions"
-.endif
 
 # ------------------------------------------------------------------------------
 .section .text
@@ -447,7 +442,7 @@ draw_textured_wall_column:
 .Ldraw_have_wall_x:
         li t0, 0xffff
         and a6, a6, t0
-        li t0, WALL_TEXTURE_WIDTH
+        li t0, TEXTURE_WIDTH
         mul a6, a6, t0
         srli a6, a6, FP_SHIFT
 
@@ -461,11 +456,11 @@ draw_textured_wall_column:
         bgez t0, .Ldraw_have_texture_x
 
 .Ldraw_flip_texture_x:
-        li t0, WALL_TEXTURE_WIDTH - 1
+        li t0, TEXTURE_WIDTH - 1
         sub a6, t0, a6
 
 .Ldraw_have_texture_x:
-        li t0, WALL_TEXTURE_HEIGHT
+        li t0, TEXTURE_HEIGHT
         mul t0, a5, t0
         li t1, SCREEN_HEIGHT
         div a7, t0, t1
@@ -473,7 +468,7 @@ draw_textured_wall_column:
         li t0, SCREEN_HEIGHT / 2
         sub t0, a2, t0
         mul t0, t0, a7
-        li t1, WALL_TEXTURE_HEIGHT / 2
+        li t1, TEXTURE_HEIGHT / 2
         slli t1, t1, FP_SHIFT
         add t0, t0, t1
 
@@ -488,8 +483,8 @@ draw_textured_wall_column:
 
 .Ldraw_textured_wall_pixel:
         srai t4, t0, FP_SHIFT
-        andi t4, t4, WALL_TEXTURE_HEIGHT - 1
-        li t5, WALL_TEXTURE_WIDTH
+        andi t4, t4, TEXTURE_HEIGHT - 1
+        li t5, TEXTURE_WIDTH
         mul t4, t4, t5
         add t4, t4, a6
         sh1add t4, t4, t2
@@ -573,8 +568,8 @@ draw_ceil_and_floor:
     add s2, t3, t5           # rayDirX1 = dirX + planeX
     add s3, t4, t6           # rayDirY1 = dirY + planeY
 
-    li t0, ASSET_WOOD_WIDTH
-    li t1, ASSET_WOOD_HEIGHT
+    li t0, TEXTURE_WIDTH
+    li t1, TEXTURE_HEIGHT
     li t2, 0xffff            # fractional mask
 
     li s5, SCREEN_HEIGHT - 1 # y counter (top to bottom)
