@@ -490,6 +490,8 @@ render_frame:
 #   * s9: floorY (Q16.16)
 #   * s10: rowDistance (Q16.16)
 #   * s11: texture base address
+#   * 0(sp): player position x (Q16.16)
+#   * 4(sp): player position y (Q16.16)
 #   * t0: texture width (integer)
 #   * t1: texture height (integer)
 #   * t2: fractional mask (0xffff)
@@ -509,6 +511,11 @@ draw_ceil_and_floor:
     sw s9, 20(sp)
     sw s10, 16(sp)
     sw s11, 12(sp)
+
+    LOAD_WORD t3, player_pos_x
+    LOAD_WORD t4, player_pos_y
+    sw t3, 0(sp)
+    sw t4, 4(sp)
 
     LOAD_WORD t3, player_dir_x
     LOAD_WORD t4, player_dir_y
@@ -543,8 +550,12 @@ next_y:
     FP_MUL_Q16 t4, t3, s10, t6          # rowDistance * (rayDirY1 - rayDirY0)
     div s7, t4, t5                      # floorStepY = rowDistance * (rayDirY1 - rayDirY0) / W
 
-    FP_MUL_Q16 s8, s10, s0, t6          # floorX = rowDistance * rayDirX0
-    FP_MUL_Q16 s9, s10, s1, t6          # floorY = rowDistance * rayDirY0
+    FP_MUL_Q16 s8, s10, s0, t6
+    lw t3, 0(sp)
+    add s8, s8, t3                      # floorX = posX + rowDistance * rayDirX0
+    FP_MUL_Q16 s9, s10, s1, t6
+    lw t3, 4(sp)
+    add s9, s9, t3                      # floorY = posY + rowDistance * rayDirY0
 
     # ceiling (y < H/2) samples a0, floor samples a1
     li s4, 0                            # x counter (left to right)
