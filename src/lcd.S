@@ -6,7 +6,6 @@
 
 # ------------------------------------------------------------------------------
 .section .text
-.align 2
 
 # ------------------------------------------------------------------------------
 # Initialize the clock tree, TIMER0, UART0, LCD GPIO, SPI1, and the
@@ -409,7 +408,7 @@ st7789_init:
         la a1, st7789_55
         li a2, 1
         call lcd_command_data
-        li a0, ST_INVON
+        li a0, ST_INVOFF
         call lcd_command
         li a0, ST_DISPON
         call lcd_command
@@ -508,9 +507,8 @@ lcd_write_byte:
 # ------------------------------------------------------------------------------
 .section .rodata
 
-# MADCTL: MX|MV|BGR. The BGR bit (0x08) is required: the ST7789VW panel
-# is wired BGR, so without it red and blue are swapped.
-st7789_madctl: .byte 0xa8   # flip y, xchange row-col, RGB mode
+# MADCTL: MY|MV, with incoming pixels interpreted as RGB.
+st7789_madctl: .byte 0xa0
 st7789_colmod: .byte 0x55
 st7789_b2:     .byte 0x0c, 0x0c, 0x00, 0x33, 0x33
 st7789_b7:     .byte 0x35

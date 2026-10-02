@@ -2,7 +2,6 @@
 
 # ------------------------------------------------------------------------------
 .section .reset, "ax"             # Kept at the boot address by the linker script.
-.align 2                          # Instructions and word accesses require 4-byte alignment.
 
 # ------------------------------------------------------------------------------
 _reset_handler:

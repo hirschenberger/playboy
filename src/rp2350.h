@@ -125,7 +125,7 @@
 .equ ST_SLPOUT,           0x11
 .equ ST_COLMOD,           0x3a
 .equ ST_MADCTL,           0x36
-.equ ST_INVON,            0x21
+.equ ST_INVOFF,           0x20
 .equ ST_DISPON,           0x29
 .equ ST_CASET,            0x2a
 .equ ST_RASET,            0x2b

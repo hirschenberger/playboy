@@ -2,7 +2,6 @@
 
 # ------------------------------------------------------------------------------
 .section .picobin, "a"            # RP2350 Boot ROM metadata, placed first in flash.
-.align 2
 picobin_start:
         .word 0xffffded3              # Picobin block start marker.
         .byte 0x42                    # IMAGE_TYPE item tag.

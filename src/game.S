@@ -10,10 +10,15 @@
 .equ FRAME_TIME_US, 1000 * 1000 / TARGET_FPS
 .equ MAP_WIDTH, 32
 .equ MAP_HEIGHT, 32
+.equ WALL_TEXTURE_WIDTH, ASSET_REDBRICK_WIDTH
+.equ WALL_TEXTURE_HEIGHT, ASSET_REDBRICK_HEIGHT
+
+.if ASSET_MOSSY_WIDTH != WALL_TEXTURE_WIDTH || ASSET_MOSSY_HEIGHT != WALL_TEXTURE_HEIGHT
+        .error "Wall textures must have identical dimensions"
+.endif
 
 # ------------------------------------------------------------------------------
 .section .text
-.align 2
 
 # ------------------------------------------------------------------------------
 # Run the main game loop: handle input, update game state, render the
@@ -150,6 +155,9 @@ game_update:
 #   * s9: step_x (integer, -1 or +1)
 #   * s10: step_y (integer, -1 or +1)
 #   * s11: side_dist_x (Q16.16)
+#   * 0(sp): ray_dir_x (Q16.16)
+#   * 4(sp): ray_dir_y (Q16.16)
+#   * 8(sp): hit wall texture address
 #   * t0-t6, a0-a1: short-lived scratch and call arguments
 render_frame:
         addi sp, sp, -64
@@ -192,6 +200,8 @@ render_frame:
         FP_MUL_Q16 t1, t0, s2, t2
         LOAD_WORD s4, player_dir_y
         add s4, s4, t1
+        sw s3, 0(sp)
+        sw s4, 4(sp)
 
         LOAD_WORD t0, player_pos_x
         FP_TO_INT s5, t0
@@ -268,6 +278,8 @@ render_frame:
         # s4 (ray_dir_y) is no longer needed; reuse it for the level map base
         # address to avoid reloading it inside the DDA loop.
         la s4, level1
+        la t0, redbrick_texture
+        sw t0, 8(sp)
 
         # DDA and wall projection will consume the s-register state above.
 
@@ -299,10 +311,11 @@ render_frame:
         lb t0, 0(t1)                # map entry
         beqz t0, .Ldda_loop
 
-        # # Find texture for hit
-        # la a5, level1_texture_map
-        # sh2add a5, t0, a5
-        # lw a5, 0(a5)                # texture map entry for hit (ptr to texture addr)
+        # Find the texture selected by this map entry.
+        la t1, level1_texture_map
+        sh2add t1, t0, t1
+        lw t1, 0(t1)
+        sw t1, 8(sp)
 
 .Lwall_hit:
         # ------------------------------------------------------------------------------
@@ -317,9 +330,10 @@ render_frame:
 .Lhave_wall_distance:
 
         mv s3, a0                   # store wall hit side
+        mv s7, t0                   # preserve perpendicular wall distance
 
         # ------------------------------------------------------------------------------
-        #  height of line
+        # Height of line
         li t1, 512                  # 1/128 in Q16.16
         ble t0, t1, .Lfull_height_column
 
@@ -327,10 +341,10 @@ render_frame:
         slli a0, a0, FP_SHIFT
         mv a1, t0
         call fp_div
-        FP_TO_INT t3, a0             # projected line height
+        FP_TO_INT s8, a0             # projected line height
 
         li t2, SCREEN_HEIGHT / 2
-        srli t3, t3, 1               # projected half-height
+        srli t3, s8, 1               # projected half-height
         sub t4, t2, t3
         max t4, t4, zero             # line start >= 0
 
@@ -345,20 +359,94 @@ render_frame:
 .Lfull_height_column:
         li t4, 0
         li t5, SCREEN_HEIGHT - 1
-        li s2, SCREEN_HEIGHT
 
         # ------------------------------------------------------------------------------
-        # Draw column line
+        # Map the wall hit position to a texture column. For an x-side hit,
+        # use the fractional y coordinate; for a y-side hit, use fractional x.
 .Ldraw_wall_column:
-        mv a0, s0                   # x0
-        mv a1, t4                   # x1: one display column
-        li a2, 1
-        sub a3, t5, t4
-        # different shade depending on side
-        li a4, 0xf3c1
-        # different shade depending on side
-        srl a4, a4, s3
-        call fill_rect
+        mv s1, t4                   # clipped draw start
+        mv s2, t5                   # clipped draw end
+
+        bnez s3, .Lwall_hit_y_side
+        lw t0, 4(sp)                # ray_dir_y
+        FP_MUL_Q16 t1, s7, t0, t2
+        LOAD_WORD t2, player_pos_y
+        add t1, t1, t2
+        j .Lhave_wall_x
+
+.Lwall_hit_y_side:
+        lw t0, 0(sp)                # ray_dir_x
+        FP_MUL_Q16 t1, s7, t0, t2
+        LOAD_WORD t2, player_pos_x
+        add t1, t1, t2
+
+.Lhave_wall_x:
+        li t0, 0xffff
+        and t1, t1, t0              # fractional wall coordinate
+        li t0, WALL_TEXTURE_WIDTH
+        mul t1, t1, t0
+        srli s4, t1, FP_SHIFT        # texture x
+
+        # Flip opposite faces so texture orientation remains consistent.
+        bnez s3, .Lcheck_y_side_flip
+        lw t0, 0(sp)
+        blez t0, .Lhave_texture_x
+        j .Lflip_texture_x
+
+.Lcheck_y_side_flip:
+        lw t0, 4(sp)
+        bgez t0, .Lhave_texture_x
+
+.Lflip_texture_x:
+        li t0, WALL_TEXTURE_WIDTH - 1
+        sub s4, t0, s4
+
+.Lhave_texture_x:
+        # texture_step = texture_height / projected_height. Derive it from the
+        # wall distance to avoid overflowing projected_height for nearby walls.
+        li t0, WALL_TEXTURE_HEIGHT
+        mul t0, s7, t0
+        li t1, SCREEN_HEIGHT
+        div s6, t0, t1              # Q16.16 texture step per screen row
+
+        li t0, SCREEN_HEIGHT / 2
+        sub t0, s1, t0
+        mul s9, t0, s6
+        li t1, WALL_TEXTURE_HEIGHT / 2
+        slli t1, t1, FP_SHIFT
+        add s9, s9, t1              # initial Q16.16 texture position
+
+        la s10, draw_buffer_ptr
+        li t0, SCREEN_WIDTH
+        mul t0, s1, t0
+        add t0, t0, s0
+        sh1add s10, t0, s10         # first framebuffer pixel in column
+
+        lw s11, 8(sp)
+        mv s5, s1
+
+.Ldraw_wall_pixel:
+        srai t0, s9, FP_SHIFT
+        andi t0, t0, WALL_TEXTURE_HEIGHT - 1
+        li t1, WALL_TEXTURE_WIDTH
+        mul t0, t0, t1
+        add t0, t0, s4
+        sh1add t0, t0, s11
+        lhu t0, 0(t0)
+        srl t0, t0, s3
+        beqz s3, .Lstore_wall_pixel
+        li t1, 0x7bef
+        and t0, t0, t1              # darken without bleeding across RGB fields
+
+.Lstore_wall_pixel:
+        rev8 t0, t0
+        srli t0, t0, 16
+        sh t0, 0(s10)
+
+        add s9, s9, s6
+        addi s5, s5, 1
+        addi s10, s10, SCREEN_WIDTH * 2
+        ble s5, s2, .Ldraw_wall_pixel
 
         # next x pos
         addi s0, s0, 1
@@ -571,13 +659,13 @@ wait_frame_time:
 
 # ------------------------------------------------------------------------------
 .section .bss
-.align 2
+.balign 4
 
 frame_start_us: .space 4
 
 # ------------------------------------------------------------------------------
 .section .data
-.align 2
+.balign 4
 player_pos_x: .word 22 * FP_ONE
 player_pos_y: .word 6 * FP_ONE
 player_dir_x: .word -FP_ONE
@@ -591,7 +679,6 @@ move_speed:   .word (FP_ONE + 50000) / 100000
 
 # ------------------------------------------------------------------------------
 .section .rodata
-.align 2
 
 enter_gameloop_msg:
         .asciz "INFO: Enter gameloop"
@@ -639,14 +726,15 @@ level1:
         .error "Incorrectly sized level map"
 .endif
 
+.balign 4
 level1_texture_map:
-    .word 0x0, mossy_texture, redbrick_texture
+        .word 0x0, mossy_texture, redbrick_texture
 
 greystone_texture:
-    .incbin "assets/greystone.bin"
+        .incbin "assets/greystone.bin"
 wood_texture:
-    .incbin "assets/wood.bin"
+        .incbin "assets/wood.bin"
 redbrick_texture:
-    .incbin "assets/redbrick.bin"
+        .incbin "assets/redbrick.bin"
 mossy_texture:
-    .incbin "assets/mossy.bin"
+        .incbin "assets/mossy.bin"

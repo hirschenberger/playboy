@@ -5,14 +5,13 @@
 
 # ------------------------------------------------------------------------------
 .section .text
-.align 2
 
 main:
         call lcd_init
 
         LOG_STRING console_boot_message
 
-        li a0, 0xffbb                 # RGB565 dark grey
+        li a0, 0x0000                 # RGB565 black
         call lcd_clear
 
         li a0, 20
