@@ -693,19 +693,20 @@ wait_frame_time:
         # check if already expired and log that
         call timer0_read_us
         sub s2, a0, s0                     # us already spent
-        ble s2, s1, .Lwait_next
+        ble s2, s1, .Lflip_buffer
 
         # LOG_STRING framerate_delay_msg
         # mv a0, s2
         # call itoa
         # LOG_STRING_PTR a0
 
+.Lflip_buffer:
+        call flip_buffer
+
 .Lwait_next:
         call timer0_read_us
         sub t0, a0, s0                     # us already spent
         bltu t0, s1, .Lwait_next
-
-        call flip_buffer
 
         lw ra, 12(sp)
         lw s0, 8(sp)
